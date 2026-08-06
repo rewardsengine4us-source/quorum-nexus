@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
 import Link from 'next/link';
-import { Mail, Lock, Github, Chrome, CheckCircle } from 'lucide-react';
+import { Mail, Lock, GitBranch, Monitor, CheckCircle } from 'lucide-react';
 
 export default function SignupPage() {
   const [email, setEmail] = useState('');

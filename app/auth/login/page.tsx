@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
 import Link from 'next/link';
-import { Mail, Lock, Github, Chrome } from 'lucide-react';
+import { Mail, Lock, GitBranch, Monitor } from 'lucide-react';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
