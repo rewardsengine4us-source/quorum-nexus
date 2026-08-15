@@ -5,13 +5,13 @@ import { useAuth } from '@/lib/auth-context';
 import { useStore } from '@/lib/store';
 import { getUserCards } from '@/lib/api';
 import { Navbar } from '@/components/navbar';
-import { ProtectedRoute } from '@/components/protected-route';
 import { CreditCard, Plus } from 'lucide-react';
 
 export default function CardsPage() {
   const { user } = useAuth();
   const { cards, setCards } = useStore();
   const [loading, setLoading] = useState(true);
+  const [showAddModal, setShowAddModal] = useState(false);
 
   useEffect(() => {
     const loadCards = async () => {
@@ -30,7 +30,7 @@ export default function CardsPage() {
   }, [user?.id, setCards]);
 
   return (
-    <ProtectedRoute>
+    <>
       <Navbar />
       <main className="max-w-7xl mx-auto px-4 py-8">
         <div className="mb-8">
@@ -47,7 +47,9 @@ export default function CardsPage() {
             <CreditCard size={48} className="mx-auto text-gray-400 mb-4" />
             <h3 className="text-xl font-bold text-gray-800 mb-2">No cards yet</h3>
             <p className="text-gray-600 mb-6">Link your credit cards to start earning and tracking rewards</p>
-            <button className="bg-gradient-to-r from-indigo-600 to-pink-600 text-white px-6 py-2 rounded-lg hover:from-indigo-700 hover:to-pink-700 transition inline-flex items-center space-x-2">
+            <button 
+              onClick={() => setShowAddModal(true)}
+              className="bg-gradient-to-r from-indigo-600 to-pink-600 text-white px-6 py-2 rounded-lg hover:from-indigo-700 hover:to-pink-700 transition inline-flex items-center space-x-2">
               <Plus size={20} />
               <span>Add Card</span>
             </button>
@@ -86,6 +88,6 @@ export default function CardsPage() {
           </div>
         )}
       </main>
-    </ProtectedRoute>
+    </>
   );
 }

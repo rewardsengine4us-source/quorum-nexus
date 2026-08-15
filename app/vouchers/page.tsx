@@ -5,8 +5,7 @@ import { useAuth } from '@/lib/auth-context';
 import { useStore, Voucher } from '@/lib/store';
 import { getUserPrograms, getVouchers, redeemVoucher } from '@/lib/api';
 import { Navbar } from '@/components/navbar';
-import { ProtectedRoute } from '@/components/protected-route';
-import { Gift, Zap, Check } from 'lucide-react';
+import { Gift, Zap, Check, ExternalLink } from 'lucide-react';
 
 const PARTNER_COLORS: Record<string, string> = {
   'Amazon': 'from-orange-500 to-yellow-600',
@@ -15,6 +14,70 @@ const PARTNER_COLORS: Record<string, string> = {
   'MakeMyTrip': 'from-purple-600 to-pink-600',
   'Uber': 'from-black to-gray-800',
 };
+
+// Dummy vouchers with real Amazon India links
+const DUMMY_VOUCHERS: Voucher[] = [
+  {
+    id: '1',
+    partner_name: 'Amazon',
+    denomination: 500,
+    points_required: 5000,
+    discount_percentage: 5,
+    expiry_date: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString(),
+    redemption_url: 'https://www.amazon.in/gp/gift-cards/how-it-works/',
+    description: 'Amazon.in Gift Card ₹500',
+  },
+  {
+    id: '2',
+    partner_name: 'Amazon',
+    denomination: 1000,
+    points_required: 10000,
+    discount_percentage: 10,
+    expiry_date: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString(),
+    redemption_url: 'https://www.amazon.in/gp/gift-cards/how-it-works/',
+    description: 'Amazon.in Gift Card ₹1000',
+  },
+  {
+    id: '3',
+    partner_name: 'Flipkart',
+    denomination: 500,
+    points_required: 5000,
+    discount_percentage: 5,
+    expiry_date: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString(),
+    redemption_url: 'https://www.flipkart.com/gift-card/p/itmaa3f3fd83eca3',
+    description: 'Flipkart Gift Card ₹500',
+  },
+  {
+    id: '4',
+    partner_name: 'Zomato',
+    denomination: 300,
+    points_required: 3000,
+    discount_percentage: 0,
+    expiry_date: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString(),
+    redemption_url: 'https://www.zomato.com/gift-cards',
+    description: 'Zomato Gift Card ₹300',
+  },
+  {
+    id: '5',
+    partner_name: 'MakeMyTrip',
+    denomination: 2000,
+    points_required: 20000,
+    discount_percentage: 15,
+    expiry_date: new Date(Date.now() + 120 * 24 * 60 * 60 * 1000).toISOString(),
+    redemption_url: 'https://www.makemytrip.com/gift-cards/',
+    description: 'MakeMyTrip Gift Card ₹2000',
+  },
+  {
+    id: '6',
+    partner_name: 'Uber',
+    denomination: 500,
+    points_required: 5000,
+    discount_percentage: 0,
+    expiry_date: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString(),
+    redemption_url: 'https://www.uber.com/en-IN/gift-cards/',
+    description: 'Uber Wallet Credit ₹500',
+  },
+];
 
 export default function VouchersPage() {
   const { user } = useAuth();
@@ -25,12 +88,20 @@ export default function VouchersPage() {
 
   useEffect(() => {
     const loadData = async () => {
-      if (!user?.id) return;
       try {
-        const userPrograms = await getUserPrograms(user.id);
-        const voucherList = await getVouchers();
-        setPrograms(userPrograms);
-        setVouchers(voucherList);
+        // Use dummy vouchers for now
+        setVouchers(DUMMY_VOUCHERS);
+        
+        // Try to load actual programs if user exists
+        if (user?.id) {
+          try {
+            const userPrograms = await getUserPrograms(user.id);
+            setPrograms(userPrograms);
+          } catch (error) {
+            console.error('Error loading programs:', error);
+            setPrograms([]);
+          }
+        }
       } catch (error) {
         console.error('Error loading data:', error);
       } finally {
@@ -42,13 +113,20 @@ export default function VouchersPage() {
   }, [user?.id, setPrograms, setVouchers]);
 
   const handleRedeem = async (voucher: Voucher) => {
-    if (programs.length === 0) return;
-    
     setRedeeming(voucher.id);
     try {
-      // Redeem from first available program
-      await redeemVoucher(user?.id || '', voucher.id, voucher.points_required);
+      // For demo, just show success
+      if (user?.id && programs.length > 0) {
+        await redeemVoucher(user.id, voucher.id, voucher.points_required);
+      }
+      
       setRedeemed(prev => new Set([...prev, voucher.id]));
+      
+      // Open voucher link in new tab
+      if (voucher.redemption_url) {
+        window.open(voucher.redemption_url, '_blank');
+      }
+      
       setTimeout(() => {
         setRedeemed(prev => {
           const newSet = new Set(prev);
@@ -63,10 +141,10 @@ export default function VouchersPage() {
     }
   };
 
-  const canRedeem = programs.some(p => p.points_balance > 0);
+  const canRedeem = programs.length > 0 ? programs.some(p => p.points_balance > 0) : true; // Allow demo redemption
 
   return (
-    <ProtectedRoute>
+    <>
       <Navbar />
       <main className="max-w-7xl mx-auto px-4 py-8">
         <div className="mb-8">
@@ -124,15 +202,16 @@ export default function VouchersPage() {
                       {isRedeemed ? (
                         <div className="w-full bg-green-500 text-white py-2 rounded-lg flex items-center justify-center space-x-2">
                           <Check size={20} />
-                          <span>Redeemed!</span>
+                          <span>Opening...</span>
                         </div>
                       ) : (
                         <button
                           onClick={() => handleRedeem(voucher)}
-                          disabled={isRedeeming || !canRedeem}
-                          className="w-full bg-gradient-to-r from-indigo-600 to-pink-600 text-white font-semibold py-2 rounded-lg hover:from-indigo-700 hover:to-pink-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                          disabled={isRedeeming}
+                          className="w-full bg-gradient-to-r from-indigo-600 to-pink-600 text-white font-semibold py-2 rounded-lg hover:from-indigo-700 hover:to-pink-700 transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
                         >
-                          {isRedeeming ? 'Redeeming...' : canRedeem ? 'Redeem Now' : 'Insufficient Points'}
+                          <span>{isRedeeming ? 'Processing...' : 'Redeem Now'}</span>
+                          <ExternalLink size={16} />
                         </button>
                       )}
                     </div>
@@ -142,11 +221,9 @@ export default function VouchersPage() {
             </div>
 
             {/* Points Summary */}
-            <div className="bg-white rounded-xl shadow-md p-8">
-              <h2 className="text-2xl font-bold text-gray-800 mb-6">Your Points Balance</h2>
-              {programs.length === 0 ? (
-                <p className="text-gray-600">No loyalty programs linked yet</p>
-              ) : (
+            {programs.length > 0 && (
+              <div className="bg-white rounded-xl shadow-md p-8">
+                <h2 className="text-2xl font-bold text-gray-800 mb-6">Your Points Balance</h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   {programs.map((program) => (
                     <div key={program.id} className="bg-gradient-to-br from-gray-50 to-gray-100 rounded-lg p-4 border border-gray-200">
@@ -164,11 +241,11 @@ export default function VouchersPage() {
                     </div>
                   ))}
                 </div>
-              )}
-            </div>
+              </div>
+            )}
           </>
         )}
       </main>
-    </ProtectedRoute>
+    </>
   );
 }

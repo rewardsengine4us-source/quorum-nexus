@@ -5,7 +5,6 @@ import { useAuth } from '@/lib/auth-context';
 import { useStore } from '@/lib/store';
 import { getUserCards, getUserPrograms, createTransfer } from '@/lib/api';
 import { Navbar } from '@/components/navbar';
-import { ProtectedRoute } from '@/components/protected-route';
 import { ArrowRight, CheckCircle } from 'lucide-react';
 
 export default function TransferPage() {
@@ -56,7 +55,7 @@ export default function TransferPage() {
   };
 
   return (
-    <ProtectedRoute>
+    <>
       <Navbar />
       <main className="max-w-7xl mx-auto px-4 py-8">
         <div className="mb-8">
@@ -187,6 +186,6 @@ export default function TransferPage() {
           </div>
         </div>
       </main>
-    </ProtectedRoute>
+    </>
   );
 }

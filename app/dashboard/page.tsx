@@ -5,7 +5,6 @@ import { useAuth } from '@/lib/auth-context';
 import { useStore } from '@/lib/store';
 import { getUserCards, getUserPrograms, getVouchers } from '@/lib/api';
 import { Navbar } from '@/components/navbar';
-import { ProtectedRoute } from '@/components/protected-route';
 import Link from 'next/link';
 import { CreditCard, Gift, TrendingUp, Zap, ArrowRight } from 'lucide-react';
 
@@ -41,7 +40,7 @@ export default function DashboardPage() {
   }, [user?.id, setCards, setPrograms, setVouchers]);
 
   return (
-    <ProtectedRoute>
+    <>
       <Navbar />
       <main className="max-w-7xl mx-auto px-4 py-8">
         {/* Hero Stats */}
@@ -155,6 +154,6 @@ export default function DashboardPage() {
           </div>
         )}
       </main>
-    </ProtectedRoute>
+    </>
   );
 }
