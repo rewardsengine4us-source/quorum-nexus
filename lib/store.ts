@@ -36,6 +36,8 @@ export type Voucher = {
   points_required: number;
   discount_percentage: number;
   expiry_date: string;
+  redemption_url?: string;
+  description?: string;
 };
 
 type Store = {

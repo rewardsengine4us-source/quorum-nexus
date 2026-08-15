@@ -141,7 +141,7 @@ export default function VouchersPage() {
     }
   };
 
-  const canRedeem = programs.length > 0 ? programs.some(p => p.points_balance > 0) : true; // Allow demo redemption
+  const canRedeem = programs.length > 0 ? programs.some(p => p.points_balance > 0) : true;
 
   return (
     <>
