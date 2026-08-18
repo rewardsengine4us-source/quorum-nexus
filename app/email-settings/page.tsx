@@ -21,9 +21,8 @@ interface EmailParsingLog {
   id: number;
   email_subject: string | null;
   sender: string | null;
-  extracted_points: number | null;
   extracted_balance: number | null;
-  parse_status: string;
+  program_id: number | null;
   detected_via: string | null;
   event_type: string | null;
   source: string | null;
@@ -43,6 +42,8 @@ function EmailSettingsBody() {
   const searchParams = useSearchParams();
   const [connection, setConnection] = useState<EmailConnection | null>(null);
   const [logs, setLogs] = useState<EmailParsingLog[]>([]);
+  const [programs, setPrograms] = useState<Record<number, string>>({});
+  const [scannedTotal, setScannedTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -63,6 +64,8 @@ function EmailSettingsBody() {
     if (data.diag?.error) throw new Error(data.diag.error);
     setConnection(data.connection || null);
     setLogs(data.logs || []);
+    setPrograms(data.programs || {});
+    setScannedTotal(data.scannedTotal || 0);
   }
 
   useEffect(() => {
@@ -180,44 +183,54 @@ function EmailSettingsBody() {
       )}
 
       <section className="mt-10">
-        <h2 className="mb-4 text-lg font-medium text-slate-100">Parsing History</h2>
+        <div className="mb-4 flex items-baseline justify-between">
+          <h2 className="text-lg font-medium text-slate-100">Points Found</h2>
+          {scannedTotal > 0 && (
+            <span className="text-xs text-slate-500">
+              {logs.length} balance{logs.length === 1 ? "" : "s"} from{" "}
+              {scannedTotal.toLocaleString()} emails scanned
+            </span>
+          )}
+        </div>
         {logs.length === 0 ? (
-          <p className="text-sm text-slate-500">No parsing events yet.</p>
+          <p className="text-sm text-slate-500">
+            No points balances found yet. Run a sync to scan your inbox.
+          </p>
         ) : (
           <div className="overflow-hidden rounded-xl border border-base-700">
             <table className="w-full text-left text-sm">
               <thead className="bg-base-800 text-slate-400">
                 <tr>
-                  <th className="px-4 py-2 font-medium">From</th>
-                  <th className="px-4 py-2 font-medium">Subject</th>
-                  <th className="px-4 py-2 font-medium">Status</th>
-                  <th className="px-4 py-2 font-medium">Extracted</th>
-                  <th className="px-4 py-2 font-medium">Parsed</th>
+                  <th className="px-4 py-2 font-medium">Program</th>
+                  <th className="px-4 py-2 font-medium">Balance</th>
+                  <th className="px-4 py-2 font-medium">Source email</th>
+                  <th className="px-4 py-2 font-medium">Found</th>
                 </tr>
               </thead>
               <tbody>
                 {logs.map((log) => (
                   <tr key={log.id} className="border-t border-base-700/60">
-                    <td className="px-4 py-2 text-xs text-slate-400 truncate">{log.sender || "—"}</td>
-                    <td className="px-4 py-2 text-slate-200 truncate max-w-xs">{log.email_subject || "—"}</td>
-                    <td className="px-4 py-2">
-                      <span
-                        className={`pill text-xs ${
-                          log.parse_status === "success"
-                            ? "bg-emerald-950 text-emerald-300 border border-emerald-900"
-                            : log.parse_status === "no_match"
-                            ? "bg-base-700 text-slate-400 border border-base-600"
-                            : "bg-red-950 text-red-300 border border-red-900"
-                        }`}
-                      >
-                        {log.parse_status}
-                      </span>
+                    <td className="px-4 py-2 text-slate-100">
+                      {(log.program_id && programs[log.program_id]) || "—"}
+                      {log.source === "pdf" && (
+                        <span className="ml-2 pill border border-base-600 bg-base-700 text-[10px] text-slate-400">
+                          PDF
+                        </span>
+                      )}
                     </td>
-                    <td className="px-4 py-2 font-mono text-xs text-slate-300">
-                      {log.extracted_balance != null ? log.extracted_balance.toLocaleString() : "—"}
+                    <td className="px-4 py-2 font-mono text-slate-100">
+                      {log.extracted_balance != null
+                        ? log.extracted_balance.toLocaleString()
+                        : "—"}
+                    </td>
+                    <td
+                      className="max-w-xs truncate px-4 py-2 text-xs text-slate-400"
+                      title={log.email_subject || ""}
+                    >
+                      {log.email_subject || "—"}
                     </td>
                     <td className="px-4 py-2 text-xs text-slate-500">
-                      {new Date(log.created_at).toLocaleString()}
+                      {new Date(log.created_at).toLocaleDateString()}
                     </td>
                   </tr>
                 ))}

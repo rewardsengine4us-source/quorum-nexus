@@ -24,6 +24,29 @@ const RISK_STYLES: Record<string, string> = {
   high: "bg-red-950 text-red-300 border border-red-900",
 };
 
+/**
+ * transfer_ratio is stored as destination-units per 1 source point
+ * (0.5 = two card points buy one mile). Rendering it raw as "0.5:1" is
+ * backwards from how transfer ratios are quoted everywhere in the
+ * points world, which always normalises the SOURCE side to 1 --
+ * "1:2" reads as "1 card point becomes 2 miles".
+ *
+ * So we invert and normalise: 0.5 -> "1:2", 0.33 -> "1:3", 1 -> "1:1".
+ * Ratios stored with rounding noise (0.33, 0.67) land on clean integers
+ * or a single decimal rather than 3.0303.
+ */
+function formatRatio(ratio: number | string | null | undefined): string {
+  // Postgres `numeric` can deserialise as a string ("0.5000"), so coerce.
+  const r = typeof ratio === "string" ? parseFloat(ratio) : ratio;
+  if (!r || !isFinite(r) || r <= 0) return "—";
+  const destPerSource = 1 / r;
+  const rounded =
+    Math.abs(destPerSource - Math.round(destPerSource)) < 0.05
+      ? String(Math.round(destPerSource))
+      : destPerSource.toFixed(1).replace(/\.0$/, "");
+  return `1:${rounded}`;
+}
+
 export default function RoutesPage() {
   return (
     <RequireEntered>
@@ -161,7 +184,7 @@ function RoutesBody() {
                 </div>
 
                 <div className="mt-4 grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
-                  <Metric label="Ratio" value={`${route.transfer_ratio}:1`} />
+                  <Metric label="Ratio" value={formatRatio(route.transfer_ratio)} />
                   <Metric
                     label="Bonus"
                     value={route.bonus_percent ? `+${route.bonus_percent}%` : "—"}
