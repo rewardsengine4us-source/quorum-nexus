@@ -81,6 +81,16 @@ for (const file of files) {
   }
 }
 
+// Array and Object members that are never interface fields. Without this
+// list, `adapters.find(...)` reads as "field `find` missing from Adapter".
+const ARRAY_AND_BUILTIN = new Set([
+  "map", "filter", "find", "findIndex", "some", "every", "reduce", "forEach",
+  "sort", "slice", "splice", "concat", "join", "includes", "indexOf",
+  "lastIndexOf", "flat", "flatMap", "reverse", "push", "pop", "shift",
+  "unshift", "at", "keys", "values", "entries", "length",
+  "toLocaleString", "toString", "valueOf", "hasOwnProperty",
+]);
+
 // --- 2. Local interface property access ---------------------------------
 for (const file of files) {
   const rel = path.relative(ROOT, file);
@@ -115,7 +125,7 @@ for (const file of files) {
       const accessRe = new RegExp("\\b" + item + "\\.([A-Za-z0-9_$]+)", "g");
       for (const a of src.matchAll(accessRe)) {
         const prop = a[1];
-        if (["map", "filter", "length", "toLocaleString", "toString"].includes(prop)) continue;
+        if (ARRAY_AND_BUILTIN.has(prop)) continue;
         if (!declared.includes(prop)) {
           fail(rel, `"${item}.${prop}" not declared on interface ${typeName} ` +
                     `(has: ${declared.join(", ")})`);
@@ -126,7 +136,7 @@ for (const file of files) {
     const directRe = new RegExp("\\b" + varName + "\\.([A-Za-z0-9_$]+)", "g");
     for (const a of src.matchAll(directRe)) {
       const prop = a[1];
-      if (["map", "filter", "length", "toLocaleString", "toString"].includes(prop)) continue;
+      if (ARRAY_AND_BUILTIN.has(prop)) continue;
       if (!declared.includes(prop)) {
         fail(rel, `"${varName}.${prop}" not declared on interface ${typeName} ` +
                   `(has: ${declared.join(", ")})`);
