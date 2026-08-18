@@ -76,6 +76,22 @@ NEXT_PUBLIC_APP_URL
 - `/redeem` — voucher partner catalog + simulated redemption flow
 - `/email-settings` — connect Gmail, trigger a manual sync, view parsing history
 
+## Shipped
+
+- **Award Search** (`/award-search`) — points required per program for a
+  route and cabin, checked against balances held. Live seat availability is
+  wired behind `SEATS_AERO_API_KEY`; without it the page returns chart
+  pricing and says so rather than inventing seat counts.
+- **Scan to Pay** (`/scan`) — reads a UPI QR and recommends the best card.
+  Falls back to merchant-name and VPA lookup when the QR omits the MCC,
+  which static Paytm and PhonePe QRs frequently do.
+- **Loyalty Sync** (`/loyalty-sync`) — AES-256-GCM credential vault with a
+  weekly cron. No program adapter is enabled yet: automated login needs a
+  headless browser that Vercel's serverless runtime cannot host.
+- **Affiliate links** — apply-link tracking per card, ready for real
+  affiliate IDs.
+- **Light / dark theme** — every colour resolves through CSS variables.
+
 ## Roadmap (in progress)
 
 - Loyalty-program login sync (weekly + on-demand), scoped to points/expiry/
