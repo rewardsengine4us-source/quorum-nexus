@@ -40,6 +40,7 @@ function CardsBody() {
   const [programs, setPrograms] = useState<LoyaltyProgram[]>([]);
   const [pendingId, setPendingId] = useState<number | null>(null);
   const [bankFilter, setBankFilter] = useState<number | "all">("all");
+  const [selectedCardId, setSelectedCardId] = useState<number | null>(null);
 
   async function refresh() {
     const [uc, cc, bk, up, lp] = await Promise.all([
@@ -72,18 +73,33 @@ function CardsBody() {
   const linkedIds = new Set(userCards.map((uc) => uc.credit_card_id));
   const pointsByProgram = new Map(points.map((p) => [p.program_id, p]));
 
+  // Only offer banks that actually issue a card we know about — with 73
+  // banks and 50 issuing, an "all banks" list is mostly dead options.
+  const banksWithCards = useMemo(() => {
+    const issuing = new Set(allCards.map((c) => c.bank_id));
+    return banks
+      .filter((b) => issuing.has(b.id))
+      .sort((a, b) => a.bank_name.localeCompare(b.bank_name));
+  }, [banks, allCards]);
+
   const availableCards = useMemo(
     () =>
-      allCards.filter(
-        (c) => !linkedIds.has(c.id) && (bankFilter === "all" || c.bank_id === bankFilter)
-      ),
+      allCards
+        .filter((c) => !linkedIds.has(c.id) && bankFilter !== "all" && c.bank_id === bankFilter)
+        .sort((a, b) => a.card_name.localeCompare(b.card_name)),
     [allCards, linkedIds, bankFilter]
+  );
+
+  const selectedCard = useMemo(
+    () => allCards.find((c) => c.id === selectedCardId) ?? null,
+    [allCards, selectedCardId]
   );
 
   async function handleAdd(cardId: number) {
     setPendingId(cardId);
     try {
       await addUserCard(cardId);
+      setSelectedCardId(null);
       await refresh();
     } catch (e: any) {
       setError(e.message ?? "Failed to link card");
@@ -196,49 +212,92 @@ function CardsBody() {
       )}
 
       <section className="mt-10">
-        <div className="mb-4 flex items-center justify-between gap-4">
-          <h2 className="text-lg font-medium text-slate-100">Add a card</h2>
-          <select
-            value={bankFilter}
-            onChange={(e) => setBankFilter(e.target.value === "all" ? "all" : Number(e.target.value))}
-            className="rounded-md border border-base-700 bg-base-900 px-3 py-1.5 text-sm text-slate-200"
-          >
-            <option value="all">All banks</option>
-            {banks.map((b) => (
-              <option key={b.id} value={b.id}>
-                {b.bank_name}
-              </option>
-            ))}
-          </select>
-        </div>
+        <h2 className="mb-1 text-lg font-medium text-slate-100">Add a card</h2>
+        <p className="mb-4 text-sm text-slate-500">
+          Pick your bank, then the specific card or variant.
+        </p>
+
         {loading ? (
-          <div className="h-40 animate-pulse rounded-xl bg-base-800" />
+          <div className="h-24 animate-pulse rounded-xl bg-base-800" />
         ) : (
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {availableCards.map((card) => {
-              const bank = bankById.get(card.bank_id);
-              return (
-                <div key={card.id} className="card-surface flex items-start justify-between rounded-xl p-4">
-                  <div>
-                    <div className="text-xs text-slate-500">{bank?.bank_name}</div>
-                    <div className="font-medium text-slate-100">{card.card_name}</div>
-                    <div className="mt-1 text-xs text-slate-500">
-                      {card.primary_benefit_category ?? "General rewards"}
-                      {card.annual_fee ? ` · ₹${card.annual_fee.toLocaleString()}/yr` : ""}
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => handleAdd(card.id)}
-                    disabled={pendingId === card.id}
-                    className="shrink-0 rounded-md bg-accent-500 px-3 py-1.5 text-xs font-medium text-base-950 hover:bg-accent-400 disabled:opacity-40"
-                  >
-                    {pendingId === card.id ? "…" : "+ Add"}
-                  </button>
-                </div>
-              );
-            })}
-            {availableCards.length === 0 && (
-              <p className="text-sm text-slate-500">All cards in this filter are already linked.</p>
+          <div className="card-surface rounded-xl p-5">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
+              <label className="block">
+                <span className="mb-1.5 block text-xs font-medium text-slate-400">Bank</span>
+                <select
+                  value={bankFilter === "all" ? "" : bankFilter}
+                  onChange={(e) => {
+                    setBankFilter(e.target.value ? Number(e.target.value) : "all");
+                    setSelectedCardId(null);
+                  }}
+                  className="w-full rounded-md border border-base-700 bg-base-900 px-3 py-2 text-sm text-slate-100 focus:border-accent-500 focus:outline-none"
+                >
+                  <option value="">Select a bank…</option>
+                  {banksWithCards.map((b) => (
+                    <option key={b.id} value={b.id}>
+                      {b.bank_name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="block">
+                <span className="mb-1.5 block text-xs font-medium text-slate-400">
+                  Card / variant
+                </span>
+                <select
+                  value={selectedCardId ?? ""}
+                  disabled={bankFilter === "all"}
+                  onChange={(e) => setSelectedCardId(e.target.value ? Number(e.target.value) : null)}
+                  className="w-full rounded-md border border-base-700 bg-base-900 px-3 py-2 text-sm text-slate-100 focus:border-accent-500 focus:outline-none disabled:opacity-40"
+                >
+                  <option value="">
+                    {bankFilter === "all" ? "Select a bank first" : "Select a card…"}
+                  </option>
+                  {availableCards.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.card_name}
+                      {c.card_tier ? ` · ${c.card_tier}` : ""}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <button
+                onClick={() => selectedCardId && handleAdd(selectedCardId)}
+                disabled={!selectedCardId || pendingId === selectedCardId}
+                className="h-[38px] shrink-0 rounded-md bg-accent-500 px-5 text-sm font-medium text-base-950 hover:bg-accent-400 disabled:opacity-40"
+              >
+                {pendingId === selectedCardId ? "Adding…" : "Add card"}
+              </button>
+            </div>
+
+            {bankFilter !== "all" && availableCards.length === 0 && (
+              <p className="mt-3 text-xs text-slate-500">
+                Every card from this bank is already linked.
+              </p>
+            )}
+
+            {selectedCard && (
+              <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-base-700 pt-4 text-xs text-slate-400">
+                <span className="pill border border-base-600 bg-base-700 text-slate-300">
+                  {selectedCard.primary_benefit_category ?? "general rewards"}
+                </span>
+                {selectedCard.annual_fee != null && (
+                  <span className="pill border border-base-600 bg-base-700 text-slate-300">
+                    ₹{selectedCard.annual_fee.toLocaleString()}/yr
+                  </span>
+                )}
+                {selectedCard.is_cobranded ? (
+                  <span className="pill border border-amber-900 bg-amber-950 text-amber-300">
+                    co-branded · earns one currency only
+                  </span>
+                ) : (
+                  <span className="pill border border-emerald-900 bg-emerald-950 text-emerald-300">
+                    transferable points
+                  </span>
+                )}
+              </div>
             )}
           </div>
         )}

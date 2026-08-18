@@ -45,6 +45,8 @@ function RoutesBody() {
   const [routes, setRoutes] = useState<TransferRoute[]>([]);
   const [scope, setScope] = useState<"mine" | "all">("mine");
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
+  const [bankFilter, setBankFilter] = useState<number | "all">("all");
+  const [cardFilter, setCardFilter] = useState<number | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -79,16 +81,52 @@ function RoutesBody() {
     [programs]
   );
 
+  // A card only belongs in the transfer explorer if it actually has
+  // transfer partners. Co-branded cards (Vistara, IndiGo, Marriott, fuel and
+  // retail tie-ups) earn one currency directly and have no route to choose,
+  // so they carry no routes and are excluded here by construction.
+  const cardIdsWithRoutes = useMemo(
+    () => new Set(routes.map((r) => r.from_card_id)),
+    [routes]
+  );
+
+  const transferableBanks = useMemo(() => {
+    const bankIds = new Set(
+      allCards.filter((c) => cardIdsWithRoutes.has(c.id)).map((c) => c.bank_id)
+    );
+    return banks
+      .filter((b) => bankIds.has(b.id))
+      .sort((a, b) => a.bank_name.localeCompare(b.bank_name));
+  }, [banks, allCards, cardIdsWithRoutes]);
+
+  const transferableCardsForBank = useMemo(() => {
+    if (bankFilter === "all") return [];
+    return allCards
+      .filter((c) => c.bank_id === bankFilter && cardIdsWithRoutes.has(c.id))
+      .sort((a, b) => a.card_name.localeCompare(b.card_name));
+  }, [allCards, bankFilter, cardIdsWithRoutes]);
+
   const filteredRoutes = useMemo(() => {
     return routes
-      .filter((r) => (scope === "mine" ? myCardIds.has(r.from_card_id) : true))
+      .filter((r) => {
+        if (scope === "mine") return myCardIds.has(r.from_card_id);
+        if (cardFilter != null) return r.from_card_id === cardFilter;
+        if (bankFilter !== "all") {
+          const card = cardById.get(r.from_card_id);
+          return card?.bank_id === bankFilter;
+        }
+        return false;
+      })
       .filter((r) => {
         if (categoryFilter === "all") return true;
         const program = programById.get(r.to_program_id);
         return program?.category === categoryFilter;
       })
       .sort((a, b) => (b.health_score ?? 0) - (a.health_score ?? 0));
-  }, [routes, scope, categoryFilter, myCardIds, programById]);
+  }, [
+    routes, scope, categoryFilter, myCardIds, programById,
+    bankFilter, cardFilter, cardById,
+  ]);
 
   return (
     <main className="mx-auto max-w-6xl px-6 py-10">
@@ -103,10 +141,14 @@ function RoutesBody() {
         </div>
       )}
 
-      <div className="mt-6 flex flex-wrap items-center gap-3">
+      <div className="mt-6 flex flex-wrap items-end gap-3">
         <div className="flex overflow-hidden rounded-md border border-base-700 text-sm">
           <button
-            onClick={() => setScope("mine")}
+            onClick={() => {
+              setScope("mine");
+              setBankFilter("all");
+              setCardFilter(null);
+            }}
             className={`px-3 py-1.5 ${scope === "mine" ? "bg-accent-500 text-base-950" : "text-slate-300"}`}
           >
             My cards
@@ -115,28 +157,84 @@ function RoutesBody() {
             onClick={() => setScope("all")}
             className={`px-3 py-1.5 ${scope === "all" ? "bg-accent-500 text-base-950" : "text-slate-300"}`}
           >
-            All cards
+            Browse by card
           </button>
         </div>
-        <select
-          value={categoryFilter}
-          onChange={(e) => setCategoryFilter(e.target.value)}
-          className="rounded-md border border-base-700 bg-base-900 px-3 py-1.5 text-sm text-slate-200"
-        >
-          <option value="all">All categories</option>
-          {categories.map((c) => (
-            <option key={c} value={c}>
-              {c}
-            </option>
-          ))}
-        </select>
+
+        {scope === "all" && (
+          <>
+            <label className="block">
+              <span className="mb-1 block text-xs text-slate-500">Bank</span>
+              <select
+                value={bankFilter === "all" ? "" : bankFilter}
+                onChange={(e) => {
+                  setBankFilter(e.target.value ? Number(e.target.value) : "all");
+                  setCardFilter(null);
+                }}
+                className="rounded-md border border-base-700 bg-base-900 px-3 py-1.5 text-sm text-slate-200"
+              >
+                <option value="">Select a bank…</option>
+                {transferableBanks.map((b) => (
+                  <option key={b.id} value={b.id}>
+                    {b.bank_name}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="block">
+              <span className="mb-1 block text-xs text-slate-500">Card</span>
+              <select
+                value={cardFilter ?? ""}
+                disabled={bankFilter === "all"}
+                onChange={(e) => setCardFilter(e.target.value ? Number(e.target.value) : null)}
+                className="rounded-md border border-base-700 bg-base-900 px-3 py-1.5 text-sm text-slate-200 disabled:opacity-40"
+              >
+                <option value="">
+                  {bankFilter === "all" ? "Select a bank first" : "All cards from this bank"}
+                </option>
+                {transferableCardsForBank.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.card_name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </>
+        )}
+
+        <label className="block">
+          <span className="mb-1 block text-xs text-slate-500">Partner type</span>
+          <select
+            value={categoryFilter}
+            onChange={(e) => setCategoryFilter(e.target.value)}
+            className="rounded-md border border-base-700 bg-base-900 px-3 py-1.5 text-sm text-slate-200"
+          >
+            <option value="all">All partners</option>
+            {categories.map((c) => (
+              <option key={c} value={c}>
+                {c}
+              </option>
+            ))}
+          </select>
+        </label>
       </div>
 
       {loading ? (
         <div className="mt-8 h-64 animate-pulse rounded-xl bg-base-800" />
       ) : scope === "mine" && userCards.length === 0 ? (
         <div className="card-surface mt-8 rounded-xl p-8 text-center text-sm text-slate-500">
-          Link a card first, or switch to &ldquo;All cards&rdquo; to browse every route.
+          Link a card first, or switch to &ldquo;Browse by card&rdquo; to explore every route.
+        </div>
+      ) : scope === "mine" && filteredRoutes.length === 0 ? (
+        <div className="card-surface mt-8 rounded-xl p-8 text-center text-sm text-slate-500">
+          None of your linked cards earn transferable points. Co-branded cards
+          (Vistara, IndiGo, Marriott and similar) earn a single airline or hotel
+          currency directly, so there is nothing to transfer.
+        </div>
+      ) : scope === "all" && bankFilter === "all" ? (
+        <div className="card-surface mt-8 rounded-xl p-8 text-center text-sm text-slate-500">
+          Select a bank above to see its transfer partners.
         </div>
       ) : (
         <div className="mt-8 grid grid-cols-1 gap-4 lg:grid-cols-2">

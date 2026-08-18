@@ -24,6 +24,14 @@ export interface CreditCard {
   is_active: boolean | null;
   icon_url: string | null;
   official_url: string | null;
+  /** Issuer reward currency this card earns (e.g. "axis_edge"). */
+  reward_currency_code: string | null;
+  /**
+   * Co-branded cards earn a single airline/hotel currency directly and
+   * have no transfer choice, so they're excluded from the transfer explorer.
+   */
+  is_cobranded: boolean | null;
+  cobrand_program_code: string | null;
 }
 
 export interface LoyaltyProgram {
