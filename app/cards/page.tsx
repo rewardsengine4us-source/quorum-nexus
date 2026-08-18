@@ -403,6 +403,14 @@ function CardsBody() {
                     transferable points
                   </span>
                 )}
+                <a
+                  href={`/api/affiliate/click?card=${selectedCard.id}`}
+                  target="_blank"
+                  rel="noopener noreferrer nofollow sponsored"
+                  className="ml-auto rounded-md border border-base-600 px-3 py-1 text-xs text-slate-300 hover:border-accent-500 hover:text-accent-400"
+                >
+                  Apply for this card →
+                </a>
               </div>
             )}
           </div>
