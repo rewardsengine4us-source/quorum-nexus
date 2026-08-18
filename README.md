@@ -46,25 +46,24 @@ changes should land as normal commits/PRs, not ad-hoc redeploys.
 
 ## Running locally
 
-\`\`\`bash
+```bash
 npm install
 npm run dev
-\`\`\`
+```
 
 Then open http://localhost:3000 and click **Enter**.
 
 Required environment variables (set in Vercel project settings — never
 commit real values):
 
-\`\`\`
+```
 NEXT_PUBLIC_SUPABASE_URL
 NEXT_PUBLIC_SUPABASE_ANON_KEY
 SUPABASE_SERVICE_ROLE_KEY      # server-only, used by lib/db.ts
 GOOGLE_CLIENT_ID
 GOOGLE_CLIENT_SECRET
 NEXT_PUBLIC_APP_URL
-GOOGLE_CLOUD_PROJECT_ID
-\`\`\`
+```
 
 ## Pages
 
