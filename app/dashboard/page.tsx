@@ -1,159 +1,209 @@
-'use client';
+"use client";
 
-import { useEffect, useState } from 'react';
-import { useAuth } from '@/lib/auth-context';
-import { useStore } from '@/lib/store';
-import { getUserCards, getUserPrograms, getVouchers } from '@/lib/api';
-import { Navbar } from '@/components/navbar';
-import Link from 'next/link';
-import { CreditCard, Gift, TrendingUp, Zap, ArrowRight } from 'lucide-react';
+import { useEffect, useState } from "react";
+import RequireEntered from "@/components/RequireEntered";
+import NavBar from "@/components/NavBar";
+import {
+  getUserCards,
+  getUserPoints,
+  getCreditCards,
+  getBanks,
+  getLoyaltyPrograms,
+} from "@/lib/queries";
+import type {
+  UserCard,
+  UserPoints,
+  CreditCard,
+  Bank,
+  LoyaltyProgram,
+} from "@/lib/types";
+import Link from "next/link";
 
 export default function DashboardPage() {
-  const { user } = useAuth();
-  const { cards, programs, vouchers, setCards, setPrograms, setVouchers } = useStore();
+  return (
+    <RequireEntered>
+      <NavBar />
+      <DashboardBody />
+    </RequireEntered>
+  );
+}
+
+function DashboardBody() {
   const [loading, setLoading] = useState(true);
-  const [totalPoints, setTotalPoints] = useState(0);
+  const [error, setError] = useState<string | null>(null);
+  const [userCards, setUserCards] = useState<UserCard[]>([]);
+  const [points, setPoints] = useState<UserPoints[]>([]);
+  const [cards, setCards] = useState<CreditCard[]>([]);
+  const [banks, setBanks] = useState<Bank[]>([]);
+  const [programs, setPrograms] = useState<LoyaltyProgram[]>([]);
 
   useEffect(() => {
-    const loadData = async () => {
-      if (!user?.id) return;
+    (async () => {
       try {
-        const userCards = await getUserCards(user.id);
-        const userPrograms = await getUserPrograms(user.id);
-        const voucherList = await getVouchers();
-
-        setCards(userCards);
-        setPrograms(userPrograms);
-        setVouchers(voucherList);
-
-        const total = userCards.reduce((sum, card) => sum + (card.points_balance || 0), 0) +
-                     userPrograms.reduce((sum, prog) => sum + (prog.points_balance || 0), 0);
-        setTotalPoints(total);
-      } catch (error) {
-        console.error('Error loading dashboard:', error);
+        const [uc, up, cc, bk, lp] = await Promise.all([
+          getUserCards(),
+          getUserPoints(),
+          getCreditCards(),
+          getBanks(),
+          getLoyaltyPrograms(),
+        ]);
+        setUserCards(uc);
+        setPoints(up);
+        setCards(cc);
+        setBanks(bk);
+        setPrograms(lp);
+      } catch (e: any) {
+        setError(e.message ?? "Failed to load dashboard");
       } finally {
         setLoading(false);
       }
-    };
+    })();
+  }, []);
 
-    loadData();
-  }, [user?.id, setCards, setPrograms, setVouchers]);
+  const cardById = new Map(cards.map((c) => [c.id, c]));
+  const bankById = new Map(banks.map((b) => [b.id, b]));
+  const programById = new Map(programs.map((p) => [p.id, p]));
+
+  const totalPoints = points.reduce((sum, p) => sum + (p.total_points ?? 0), 0);
 
   return (
-    <>
-      <Navbar />
-      <main className="max-w-7xl mx-auto px-4 py-8">
-        {/* Hero Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
-          <div className="bg-gradient-to-br from-blue-500 to-blue-600 text-white rounded-xl p-6 shadow-lg">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-blue-100 text-sm">Total Points</p>
-                <h3 className="text-3xl font-bold mt-2">{loading ? '...' : totalPoints.toLocaleString()}</h3>
-              </div>
-              <TrendingUp size={32} className="opacity-80" />
-            </div>
-          </div>
+    <main className="mx-auto max-w-6xl px-6 py-10">
+      <h1 className="text-2xl font-semibold text-slate-50">Dashboard</h1>
+      <p className="mt-1 text-sm text-slate-500">Demo account · demo-user-001</p>
 
-          <div className="bg-gradient-to-br from-purple-500 to-purple-600 text-white rounded-xl p-6 shadow-lg">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-purple-100 text-sm">Credit Cards</p>
-                <h3 className="text-3xl font-bold mt-2">{cards.length}</h3>
-              </div>
-              <CreditCard size={32} className="opacity-80" />
-            </div>
-          </div>
-
-          <div className="bg-gradient-to-br from-pink-500 to-pink-600 text-white rounded-xl p-6 shadow-lg">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-pink-100 text-sm">Loyalty Programs</p>
-                <h3 className="text-3xl font-bold mt-2">{programs.length}</h3>
-              </div>
-              <Gift size={32} className="opacity-80" />
-            </div>
-          </div>
-
-          <div className="bg-gradient-to-br from-orange-500 to-orange-600 text-white rounded-xl p-6 shadow-lg">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-orange-100 text-sm">Vouchers</p>
-                <h3 className="text-3xl font-bold mt-2">{vouchers.length}</h3>
-              </div>
-              <Zap size={32} className="opacity-80" />
-            </div>
-          </div>
+      {error && (
+        <div className="mt-6 rounded-lg border border-red-900 bg-red-950/40 p-4 text-sm text-red-300">
+          {error}
         </div>
+      )}
 
-        {/* Quick Actions */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-          <Link href="/cards">
-            <div className="bg-white rounded-xl p-8 shadow-md hover:shadow-lg transition cursor-pointer">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="text-xl font-bold text-gray-800">View Cards</h3>
-                  <p className="text-gray-600 mt-1">Manage your credit cards and rewards</p>
-                </div>
-                <ArrowRight className="text-indigo-600" size={28} />
-              </div>
-            </div>
+      <div className="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <StatCard label="Linked cards" value={userCards.length.toString()} />
+        <StatCard label="Loyalty programs tracked" value={points.length.toString()} />
+        <StatCard label="Total points" value={totalPoints.toLocaleString()} accent />
+      </div>
+
+      <section className="mt-10">
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="text-lg font-medium text-slate-100">Your cards</h2>
+          <Link href="/cards" className="text-sm text-accent-400 hover:underline">
+            Manage cards →
           </Link>
-
-          <Link href="/transfer">
-            <div className="bg-white rounded-xl p-8 shadow-md hover:shadow-lg transition cursor-pointer">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="text-xl font-bold text-gray-800">Transfer Points</h3>
-                  <p className="text-gray-600 mt-1">Move rewards between programs</p>
-                </div>
-                <ArrowRight className="text-indigo-600" size={28} />
-              </div>
-            </div>
-          </Link>
-
-          <Link href="/vouchers">
-            <div className="bg-white rounded-xl p-8 shadow-md hover:shadow-lg transition cursor-pointer">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="text-xl font-bold text-gray-800">Redeem Vouchers</h3>
-                  <p className="text-gray-600 mt-1">Convert points to vouchers</p>
-                </div>
-                <ArrowRight className="text-indigo-600" size={28} />
-              </div>
-            </div>
-          </Link>
-
-          <div className="bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl p-8 text-white">
-            <h3 className="text-xl font-bold">Pro Tip</h3>
-            <p className="mt-2">Stack your rewards! Transfer points from multiple cards to loyalty programs for faster redemption.</p>
-          </div>
         </div>
-
-        {/* Recent Cards */}
-        {cards.length > 0 && (
-          <div className="bg-white rounded-xl shadow-md p-6">
-            <h2 className="text-2xl font-bold text-gray-800 mb-6">Your Cards</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {cards.slice(0, 3).map((card) => (
-                <div key={card.id} className="bg-gradient-to-br from-gray-900 to-gray-800 rounded-lg p-4 text-white">
-                  <p className="text-sm text-gray-400 mb-2">{card.bank_name}</p>
-                  <h4 className="text-lg font-semibold mb-4">{card.card_name}</h4>
-                  <div className="flex justify-between items-end">
-                    <div>
-                      <p className="text-xs text-gray-400">Points Balance</p>
-                      <p className="text-2xl font-bold">{card.points_balance.toLocaleString()}</p>
-                    </div>
-                    <div className="text-right text-xs">
-                      <p className="text-gray-400">{card.rewards_rate}% rewards</p>
-                    </div>
+        {loading ? (
+          <SkeletonRow />
+        ) : userCards.length === 0 ? (
+          <EmptyState
+            text="No cards linked yet."
+            cta="Link your first card"
+            href="/cards"
+          />
+        ) : (
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {userCards.map((uc) => {
+              const card = cardById.get(uc.credit_card_id);
+              const bank = card ? bankById.get(card.bank_id) : undefined;
+              return (
+                <div key={uc.id} className="card-surface rounded-xl p-4">
+                  <div className="text-xs text-slate-500">{bank?.bank_name}</div>
+                  <div className="mt-1 font-medium text-slate-100">
+                    {card?.card_name ?? "Unknown card"}
                   </div>
+                  {card?.card_tier && (
+                    <span className="pill mt-2 bg-base-700 text-slate-300">
+                      {card.card_tier}
+                    </span>
+                  )}
                 </div>
-              ))}
-            </div>
+              );
+            })}
           </div>
         )}
-      </main>
-    </>
+      </section>
+
+      <section className="mt-10">
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="text-lg font-medium text-slate-100">Points balances</h2>
+          <Link href="/cards" className="text-sm text-accent-400 hover:underline">
+            Update balances →
+          </Link>
+        </div>
+        {loading ? (
+          <SkeletonRow />
+        ) : points.length === 0 ? (
+          <EmptyState
+            text="No points tracked yet. Link a card to start tracking balances."
+            cta="Go to cards"
+            href="/cards"
+          />
+        ) : (
+          <div className="overflow-hidden rounded-xl border border-base-700">
+            <table className="w-full text-left text-sm">
+              <thead className="bg-base-800 text-slate-400">
+                <tr>
+                  <th className="px-4 py-2 font-medium">Program</th>
+                  <th className="px-4 py-2 font-medium">Category</th>
+                  <th className="px-4 py-2 text-right font-medium">Balance</th>
+                </tr>
+              </thead>
+              <tbody>
+                {points.map((p) => {
+                  const program = programById.get(p.program_id);
+                  return (
+                    <tr key={p.id} className="border-t border-base-700/60">
+                      <td className="px-4 py-2 text-slate-200">
+                        {program?.program_name ?? "Unknown program"}
+                      </td>
+                      <td className="px-4 py-2 text-slate-500">{program?.category ?? "—"}</td>
+                      <td className="px-4 py-2 text-right font-mono text-slate-100">
+                        {(p.total_points ?? 0).toLocaleString()}{" "}
+                        <span className="text-xs text-slate-500">
+                          {program?.points_name ?? "pts"}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+    </main>
+  );
+}
+
+function StatCard({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
+  return (
+    <div className="card-surface rounded-xl p-5">
+      <div className="text-xs uppercase tracking-wide text-slate-500">{label}</div>
+      <div className={`mt-2 text-2xl font-semibold ${accent ? "text-accent-400" : "text-slate-100"}`}>
+        {value}
+      </div>
+    </div>
+  );
+}
+
+function EmptyState({ text, cta, href }: { text: string; cta: string; href: string }) {
+  return (
+    <div className="card-surface rounded-xl p-8 text-center">
+      <p className="text-sm text-slate-500">{text}</p>
+      <Link
+        href={href}
+        className="mt-4 inline-block rounded-md bg-accent-500 px-4 py-2 text-sm font-medium text-base-950 hover:bg-accent-400"
+      >
+        {cta}
+      </Link>
+    </div>
+  );
+}
+
+function SkeletonRow() {
+  return (
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+      {[0, 1, 2].map((i) => (
+        <div key={i} className="h-20 animate-pulse rounded-xl bg-base-800" />
+      ))}
+    </div>
   );
 }

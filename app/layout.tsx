@@ -1,30 +1,20 @@
-'use client';
-
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
-import { AuthProvider } from "@/lib/auth-context";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
+export const metadata: Metadata = {
+  title: "Quorum Nexus",
+  description: "Credit card points transfer optimizer & redemption platform",
+};
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
-
-export default function RootLayout({ children }: any) {
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   return (
-    <html
-      lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
-    >
-      <body className="min-h-full flex flex-col bg-gradient-to-br from-slate-50 via-blue-50 to-purple-50">
-        <AuthProvider>
-          {children}
-        </AuthProvider>
+    <html lang="en">
+      <body className="min-h-screen bg-base-950 text-slate-100 antialiased">
+        {children}
       </body>
     </html>
   );
