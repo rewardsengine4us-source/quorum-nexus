@@ -8,6 +8,7 @@ const links = [
   { href: "/dashboard", label: "Dashboard" },
   { href: "/cards", label: "Cards" },
   { href: "/routes", label: "Transfer Routes" },
+  { href: "/scan", label: "Scan" },
   { href: "/award-search", label: "Award Search" },
   { href: "/loyalty-sync", label: "Sync" },
   { href: "/wishlist", label: "Wishlist" },
