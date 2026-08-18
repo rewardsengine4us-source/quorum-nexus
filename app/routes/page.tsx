@@ -17,6 +17,7 @@ import type {
   LoyaltyProgram,
   TransferRoute,
 } from "@/lib/types";
+import { formatRatio } from "@/lib/format";
 
 const RISK_STYLES: Record<string, string> = {
   low: "bg-emerald-950 text-emerald-300 border border-emerald-900",
@@ -24,33 +25,6 @@ const RISK_STYLES: Record<string, string> = {
   high: "bg-red-950 text-red-300 border border-red-900",
 };
 
-function gcd(a: number, b: number): number {
-  return b === 0 ? a : gcd(b, a % b);
-}
-
-/**
- * Transfer ratios are stored as a decimal (program points received per
- * 1 card point). Points/miles convention is always a whole-number pair,
- * never a decimal — "0.5:1" is not how anyone writes it. Scale to the
- * smallest integer pair and reduce:
- *   0.5  -> 1:2      1.25 -> 5:4      2.5 -> 5:2      1 -> 1:1
- */
-export function formatRatio(ratio: number | null | undefined): string {
-  if (ratio == null || !isFinite(ratio) || ratio <= 0) return "—";
-
-  // Smallest denominator that turns the ratio into a whole number.
-  let denominator = 1;
-  while (
-    denominator <= 1000 &&
-    Math.abs(ratio * denominator - Math.round(ratio * denominator)) > 1e-9
-  ) {
-    denominator++;
-  }
-
-  const numerator = Math.round(ratio * denominator);
-  const divisor = gcd(numerator, denominator) || 1;
-  return `${numerator / divisor}:${denominator / divisor}`;
-}
 
 export default function RoutesPage() {
   return (
