@@ -2,19 +2,116 @@
 @tailwind components;
 @tailwind utilities;
 
+/*
+ * Theming.
+ *
+ * Every colour the app uses is a CSS variable holding a bare "R G B"
+ * triple, so Tailwind can apply opacity modifiers (bg-base-900/60).
+ * The class names stay exactly as they were — bg-base-900, text-slate-500,
+ * bg-emerald-950 — but they now resolve through these variables, so
+ * flipping the theme is a single class on <html> rather than a rewrite of
+ * every component.
+ *
+ * The slate scale is remapped to three semantic tiers (high / mid / low
+ * contrast text) because that is all the app ever used it for.
+ */
+
+:root {
+  color-scheme: dark;
+
+  --bg-page: 5 6 10;
+  --bg-surface: 11 14 22;
+  --bg-raised: 18 22 39;
+  --border: 27 32 53;
+  --border-strong: 44 52 80;
+
+  --text-hi: 237 240 247;
+  --text-mid: 148 163 184;
+  --text-lo: 100 116 139;
+
+  --accent-400: 125 211 252;
+  --accent-500: 56 189 248;
+  --accent-600: 14 165 233;
+  --on-accent: 5 6 10;
+
+  --ok-bg: 6 33 24;
+  --ok-border: 6 78 59;
+  --ok-text: 110 231 183;
+
+  --warn-bg: 41 26 4;
+  --warn-border: 120 53 15;
+  --warn-text: 252 211 77;
+
+  --err-bg: 45 10 12;
+  --err-border: 127 29 29;
+  --err-text: 252 165 165;
+
+  --gold-400: 250 204 21;
+
+  --card-from: 18 22 39;
+  --card-to: 11 14 22;
+  --selection: 56 189 248;
+}
+
+:root.light {
+  color-scheme: light;
+
+  --bg-page: 248 250 252;
+  --bg-surface: 255 255 255;
+  --bg-raised: 241 245 249;
+  --border: 226 232 240;
+  --border-strong: 203 213 225;
+
+  --text-hi: 15 23 42;
+  --text-mid: 71 85 105;
+  --text-lo: 100 116 139;
+
+  --accent-400: 2 132 199;
+  --accent-500: 2 132 199;
+  --accent-600: 3 105 161;
+  --on-accent: 255 255 255;
+
+  --ok-bg: 236 253 245;
+  --ok-border: 167 243 208;
+  --ok-text: 4 108 78;
+
+  --warn-bg: 255 251 235;
+  --warn-border: 253 230 138;
+  --warn-text: 146 64 14;
+
+  --err-bg: 254 242 242;
+  --err-border: 254 202 202;
+  --err-text: 153 27 27;
+
+  --gold-400: 161 98 7;
+
+  --card-from: 255 255 255;
+  --card-to: 255 255 255;
+  --selection: 2 132 199;
+}
+
 html,
 body {
-  background-color: #05060a;
-  color: #e6e8ef;
+  background-color: rgb(var(--bg-page));
+  color: rgb(var(--text-hi));
+}
+
+html {
+  /* Avoid a jarring flash when the theme flips. */
+  transition: background-color 0.15s ease;
 }
 
 ::selection {
-  background-color: rgba(56, 189, 248, 0.35);
+  background-color: rgb(var(--selection) / 0.35);
 }
 
 .card-surface {
-  background: linear-gradient(180deg, #121627 0%, #0b0e16 100%);
-  border: 1px solid #1b2035;
+  background: linear-gradient(
+    180deg,
+    rgb(var(--card-from)) 0%,
+    rgb(var(--card-to)) 100%
+  );
+  border: 1px solid rgb(var(--border));
 }
 
 .pill {
@@ -25,4 +122,11 @@ body {
   font-size: 0.75rem;
   font-weight: 600;
   letter-spacing: 0.02em;
+}
+
+/* Native controls should follow the theme rather than the OS default. */
+select,
+input,
+textarea {
+  color-scheme: inherit;
 }

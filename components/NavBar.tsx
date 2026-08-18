@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
+import ThemeToggle from "@/components/ThemeToggle";
 
 const links = [
   { href: "/dashboard", label: "Dashboard" },
@@ -44,12 +45,15 @@ export default function NavBar() {
             </Link>
           ))}
         </nav>
-        <button
-          onClick={exit}
-          className="rounded-md border border-base-700 px-3 py-1.5 text-xs text-slate-400 hover:border-base-700 hover:text-slate-200"
-        >
-          Exit demo
-        </button>
+        <div className="flex items-center gap-2">
+          <ThemeToggle />
+          <button
+            onClick={exit}
+            className="rounded-md border border-base-700 px-3 py-1.5 text-xs text-slate-400 hover:text-slate-200"
+          >
+            Exit demo
+          </button>
+        </div>
       </div>
     </header>
   );

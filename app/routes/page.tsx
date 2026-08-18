@@ -122,11 +122,38 @@ function RoutesBody() {
         const program = programById.get(r.to_program_id);
         return program?.category === categoryFilter;
       })
-      .sort((a, b) => (b.health_score ?? 0) - (a.health_score ?? 0));
+      // Group by card, then by partner type (airlines before hotels), then
+      // alphabetically. Sorting purely by health score scattered partners
+      // from the same card across the whole list.
+      .sort((a, b) => {
+        const cardA = cardById.get(a.from_card_id);
+        const cardB = cardById.get(b.from_card_id);
+        const nameCmp = (cardA?.card_name ?? "").localeCompare(cardB?.card_name ?? "");
+        if (nameCmp !== 0) return nameCmp;
+
+        const progA = programById.get(a.to_program_id);
+        const progB = programById.get(b.to_program_id);
+        const rank = (c?: string | null) =>
+          c === "airline" ? 0 : c === "hotel" ? 1 : 2;
+        const catCmp = rank(progA?.category) - rank(progB?.category);
+        if (catCmp !== 0) return catCmp;
+
+        return (progA?.program_name ?? "").localeCompare(progB?.program_name ?? "");
+      });
   }, [
     routes, scope, categoryFilter, myCardIds, programById,
     bankFilter, cardFilter, cardById,
   ]);
+
+  // Partner counts per card, so the header can say "18 partners" rather
+  // than leaving the user to count cards.
+  const routeSummary = useMemo(() => {
+    const byCard = new Map<number, number>();
+    for (const r of filteredRoutes) {
+      byCard.set(r.from_card_id, (byCard.get(r.from_card_id) ?? 0) + 1);
+    }
+    return { cards: byCard.size, partners: filteredRoutes.length };
+  }, [filteredRoutes]);
 
   return (
     <main className="mx-auto max-w-6xl px-6 py-10">
@@ -237,7 +264,15 @@ function RoutesBody() {
           Select a bank above to see its transfer partners.
         </div>
       ) : (
-        <div className="mt-8 grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <>
+        {routeSummary.partners > 0 && (
+          <p className="mt-6 text-xs text-slate-500">
+            {routeSummary.partners} transfer partner
+            {routeSummary.partners === 1 ? "" : "s"} across {routeSummary.cards} card
+            {routeSummary.cards === 1 ? "" : "s"}
+          </p>
+        )}
+        <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
           {filteredRoutes.map((route) => {
             const card = cardById.get(route.from_card_id);
             const bank = card ? bankById.get(card.bank_id) : undefined;
@@ -287,6 +322,7 @@ function RoutesBody() {
             <p className="text-sm text-slate-500">No routes match this filter.</p>
           )}
         </div>
+        </>
       )}
     </main>
   );

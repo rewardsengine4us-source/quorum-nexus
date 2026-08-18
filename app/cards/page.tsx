@@ -41,6 +41,8 @@ function CardsBody() {
   const [pendingId, setPendingId] = useState<number | null>(null);
   const [bankFilter, setBankFilter] = useState<number | "all">("all");
   const [selectedCardId, setSelectedCardId] = useState<number | null>(null);
+  const [balanceProgramId, setBalanceProgramId] = useState<number | null>(null);
+  const [balanceValue, setBalanceValue] = useState<string>("");
 
   async function refresh() {
     const [uc, cc, bk, up, lp] = await Promise.all([
@@ -94,6 +96,43 @@ function CardsBody() {
     () => allCards.find((c) => c.id === selectedCardId) ?? null,
     [allCards, selectedCardId]
   );
+
+  // Only programs the user actually holds points in. With 250+ programs in
+  // the catalog, rendering an input for every one buries the handful that
+  // matter.
+  const trackedBalances = useMemo(() => {
+    const byId = new Map(programs.map((p) => [p.id, p]));
+    return points
+      .map((p) => ({ program: byId.get(p.program_id), points: p.total_points ?? 0 }))
+      .filter(
+        (entry): entry is { program: LoyaltyProgram; points: number } =>
+          entry.program != null
+      )
+      .sort((a, b) => b.points - a.points);
+  }, [points, programs]);
+
+  // Grouped so a 250-entry dropdown stays navigable.
+  const programGroups = useMemo(() => {
+    const order = ["airline", "hotel", "bank", "retail", "other"];
+    const labels: Record<string, string> = {
+      airline: "Airlines",
+      hotel: "Hotels",
+      bank: "Bank reward currencies",
+      retail: "Retail & lifestyle",
+      other: "Other",
+    };
+    const buckets: Record<string, LoyaltyProgram[]> = {};
+    for (const p of programs) {
+      const key = order.includes(p.category ?? "") ? (p.category as string) : "other";
+      (buckets[key] ||= []).push(p);
+    }
+    return order
+      .filter((k) => buckets[k]?.length)
+      .map((k) => ({
+        label: labels[k],
+        items: buckets[k].sort((a, b) => a.program_name.localeCompare(b.program_name)),
+      }));
+  }, [programs]);
 
   async function handleAdd(cardId: number) {
     setPendingId(cardId);
@@ -178,38 +217,105 @@ function CardsBody() {
         )}
       </section>
 
-      {userCards.length > 0 && (
-        <section className="mt-10">
-          <h2 className="mb-4 text-lg font-medium text-slate-100">Points balances</h2>
-          <p className="mb-4 text-sm text-slate-500">
-            Enter your current balance for each loyalty program you track. This feeds the
-            transfer route recommendations.
-          </p>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            {programs.map((program) => {
-              const existing = pointsByProgram.get(program.id);
-              return (
-                <div
-                  key={program.id}
-                  className="flex items-center justify-between rounded-lg border border-base-700 px-4 py-2.5"
-                >
-                  <div>
-                    <div className="text-sm text-slate-200">{program.program_name}</div>
-                    <div className="text-xs text-slate-500">{program.category}</div>
-                  </div>
-                  <input
-                    type="number"
-                    min={0}
-                    defaultValue={existing?.total_points ?? 0}
-                    onBlur={(e) => handleBalanceChange(program.id, e.target.value)}
-                    className="w-28 rounded-md border border-base-700 bg-base-900 px-2 py-1 text-right text-sm text-slate-100 focus:border-accent-500 focus:outline-none"
-                  />
-                </div>
-              );
-            })}
+      <section className="mt-10">
+        <h2 className="mb-1 text-lg font-medium text-slate-100">Points balances</h2>
+        <p className="mb-4 text-sm text-slate-500">
+          Balances found by the email sync appear here automatically. Add or
+          correct one manually below.
+        </p>
+
+        {trackedBalances.length > 0 && (
+          <div className="mb-4 overflow-hidden rounded-xl border border-base-700">
+            <table className="w-full text-left text-sm">
+              <thead className="bg-base-800 text-slate-400">
+                <tr>
+                  <th className="px-4 py-2 font-medium">Program</th>
+                  <th className="px-4 py-2 font-medium">Type</th>
+                  <th className="px-4 py-2 text-right font-medium">Balance</th>
+                </tr>
+              </thead>
+              <tbody>
+                {trackedBalances.map((entry) => (
+                  <tr key={entry.program.id} className="border-t border-base-700/60">
+                    <td className="px-4 py-2 text-slate-200">
+                      {entry.program.program_name}
+                    </td>
+                    <td className="px-4 py-2 text-xs text-slate-500">
+                      {entry.program.category ?? "—"}
+                    </td>
+                    <td className="px-4 py-2 text-right">
+                      <input
+                        type="number"
+                        min={0}
+                        defaultValue={entry.points}
+                        onBlur={(e) =>
+                          handleBalanceChange(entry.program.id, e.target.value)
+                        }
+                        className="w-32 rounded-md border border-base-700 bg-base-900 px-2 py-1 text-right font-mono text-sm text-slate-100 focus:border-accent-500 focus:outline-none"
+                      />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
-        </section>
-      )}
+        )}
+
+        <div className="card-surface rounded-xl p-5">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-[2fr_1fr_auto] sm:items-end">
+            <label className="block">
+              <span className="mb-1.5 block text-xs font-medium text-slate-400">
+                Loyalty program
+              </span>
+              <select
+                value={balanceProgramId ?? ""}
+                onChange={(e) =>
+                  setBalanceProgramId(e.target.value ? Number(e.target.value) : null)
+                }
+                className="w-full rounded-md border border-base-700 bg-base-900 px-3 py-2 text-sm text-slate-100 focus:border-accent-500 focus:outline-none"
+              >
+                <option value="">Select a program…</option>
+                {programGroups.map((group) => (
+                  <optgroup key={group.label} label={group.label}>
+                    {group.items.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.program_name}
+                      </option>
+                    ))}
+                  </optgroup>
+                ))}
+              </select>
+            </label>
+
+            <label className="block">
+              <span className="mb-1.5 block text-xs font-medium text-slate-400">
+                Balance
+              </span>
+              <input
+                type="number"
+                min={0}
+                value={balanceValue}
+                onChange={(e) => setBalanceValue(e.target.value)}
+                placeholder="0"
+                className="w-full rounded-md border border-base-700 bg-base-900 px-3 py-2 text-right font-mono text-sm text-slate-100 focus:border-accent-500 focus:outline-none"
+              />
+            </label>
+
+            <button
+              onClick={async () => {
+                if (balanceProgramId == null || balanceValue === "") return;
+                await handleBalanceChange(balanceProgramId, balanceValue);
+                setBalanceProgramId(null);
+                setBalanceValue("");
+              }}
+              disabled={balanceProgramId == null || balanceValue === ""}
+              className="h-[38px] rounded-md bg-accent-500 px-5 text-sm font-medium text-base-950 hover:bg-accent-400 disabled:opacity-40"
+            >
+              Save balance
+            </button>
+          </div>
+        </div>
+      </section>
 
       <section className="mt-10">
         <h2 className="mb-1 text-lg font-medium text-slate-100">Add a card</h2>
