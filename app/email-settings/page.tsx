@@ -23,6 +23,7 @@ interface EmailParsingLog {
   sender: string | null;
   extracted_points: number | null;
   extracted_balance: number | null;
+  program_id: number | null;
   parse_status: string;
   detected_via: string | null;
   event_type: string | null;
