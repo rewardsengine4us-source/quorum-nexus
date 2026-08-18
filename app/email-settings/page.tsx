@@ -21,8 +21,9 @@ interface EmailParsingLog {
   id: number;
   email_subject: string | null;
   sender: string | null;
+  extracted_points: number | null;
   extracted_balance: number | null;
-  program_id: number | null;
+  parse_status: string;
   detected_via: string | null;
   event_type: string | null;
   source: string | null;
@@ -42,8 +43,8 @@ function EmailSettingsBody() {
   const searchParams = useSearchParams();
   const [connection, setConnection] = useState<EmailConnection | null>(null);
   const [logs, setLogs] = useState<EmailParsingLog[]>([]);
+  const [scannedTotal, setScannedTotal] = useState<number | null>(null);
   const [programs, setPrograms] = useState<Record<number, string>>({});
-  const [scannedTotal, setScannedTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -64,8 +65,8 @@ function EmailSettingsBody() {
     if (data.diag?.error) throw new Error(data.diag.error);
     setConnection(data.connection || null);
     setLogs(data.logs || []);
+    setScannedTotal(typeof data.scannedTotal === "number" ? data.scannedTotal : null);
     setPrograms(data.programs || {});
-    setScannedTotal(data.scannedTotal || 0);
   }
 
   useEffect(() => {
@@ -185,9 +186,9 @@ function EmailSettingsBody() {
       <section className="mt-10">
         <div className="mb-4 flex items-baseline justify-between">
           <h2 className="text-lg font-medium text-slate-100">Points Found</h2>
-          {scannedTotal > 0 && (
+          {scannedTotal != null && (
             <span className="text-xs text-slate-500">
-              {logs.length} balance{logs.length === 1 ? "" : "s"} from{" "}
+              {logs.length} balance{logs.length === 1 ? "" : "s"} extracted from{" "}
               {scannedTotal.toLocaleString()} emails scanned
             </span>
           )}
@@ -202,26 +203,17 @@ function EmailSettingsBody() {
               <thead className="bg-base-800 text-slate-400">
                 <tr>
                   <th className="px-4 py-2 font-medium">Program</th>
-                  <th className="px-4 py-2 font-medium">Balance</th>
-                  <th className="px-4 py-2 font-medium">Source email</th>
-                  <th className="px-4 py-2 font-medium">Found</th>
+                  <th className="px-4 py-2 font-medium">Subject</th>
+                  <th className="px-4 py-2 text-right font-medium">Balance</th>
+                  <th className="px-4 py-2 font-medium">Source</th>
+                  <th className="px-4 py-2 font-medium">Detected via</th>
                 </tr>
               </thead>
               <tbody>
                 {logs.map((log) => (
                   <tr key={log.id} className="border-t border-base-700/60">
-                    <td className="px-4 py-2 text-slate-100">
-                      {(log.program_id && programs[log.program_id]) || "—"}
-                      {log.source === "pdf" && (
-                        <span className="ml-2 pill border border-base-600 bg-base-700 text-[10px] text-slate-400">
-                          PDF
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-4 py-2 font-mono text-slate-100">
-                      {log.extracted_balance != null
-                        ? log.extracted_balance.toLocaleString()
-                        : "—"}
+                    <td className="px-4 py-2 text-slate-200">
+                      {log.program_id ? programs[log.program_id] ?? "—" : "—"}
                     </td>
                     <td
                       className="max-w-xs truncate px-4 py-2 text-xs text-slate-400"
@@ -229,8 +221,18 @@ function EmailSettingsBody() {
                     >
                       {log.email_subject || "—"}
                     </td>
-                    <td className="px-4 py-2 text-xs text-slate-500">
-                      {new Date(log.created_at).toLocaleDateString()}
+                    <td className="px-4 py-2 text-right font-mono text-slate-100">
+                      {log.extracted_balance != null
+                        ? log.extracted_balance.toLocaleString()
+                        : "—"}
+                    </td>
+                    <td className="px-4 py-2">
+                      <span className="pill border border-base-600 bg-base-700 text-xs text-slate-300">
+                        {log.source === "pdf" ? "PDF statement" : "email body"}
+                      </span>
+                    </td>
+                    <td className="px-4 py-2 font-mono text-xs text-slate-500">
+                      {log.detected_via || "—"}
                     </td>
                   </tr>
                 ))}

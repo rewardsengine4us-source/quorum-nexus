@@ -24,27 +24,32 @@ const RISK_STYLES: Record<string, string> = {
   high: "bg-red-950 text-red-300 border border-red-900",
 };
 
+function gcd(a: number, b: number): number {
+  return b === 0 ? a : gcd(b, a % b);
+}
+
 /**
- * transfer_ratio is stored as destination-units per 1 source point
- * (0.5 = two card points buy one mile). Rendering it raw as "0.5:1" is
- * backwards from how transfer ratios are quoted everywhere in the
- * points world, which always normalises the SOURCE side to 1 --
- * "1:2" reads as "1 card point becomes 2 miles".
- *
- * So we invert and normalise: 0.5 -> "1:2", 0.33 -> "1:3", 1 -> "1:1".
- * Ratios stored with rounding noise (0.33, 0.67) land on clean integers
- * or a single decimal rather than 3.0303.
+ * Transfer ratios are stored as a decimal (program points received per
+ * 1 card point). Points/miles convention is always a whole-number pair,
+ * never a decimal — "0.5:1" is not how anyone writes it. Scale to the
+ * smallest integer pair and reduce:
+ *   0.5  -> 1:2      1.25 -> 5:4      2.5 -> 5:2      1 -> 1:1
  */
-function formatRatio(ratio: number | string | null | undefined): string {
-  // Postgres `numeric` can deserialise as a string ("0.5000"), so coerce.
-  const r = typeof ratio === "string" ? parseFloat(ratio) : ratio;
-  if (!r || !isFinite(r) || r <= 0) return "—";
-  const destPerSource = 1 / r;
-  const rounded =
-    Math.abs(destPerSource - Math.round(destPerSource)) < 0.05
-      ? String(Math.round(destPerSource))
-      : destPerSource.toFixed(1).replace(/\.0$/, "");
-  return `1:${rounded}`;
+export function formatRatio(ratio: number | null | undefined): string {
+  if (ratio == null || !isFinite(ratio) || ratio <= 0) return "—";
+
+  // Smallest denominator that turns the ratio into a whole number.
+  let denominator = 1;
+  while (
+    denominator <= 1000 &&
+    Math.abs(ratio * denominator - Math.round(ratio * denominator)) > 1e-9
+  ) {
+    denominator++;
+  }
+
+  const numerator = Math.round(ratio * denominator);
+  const divisor = gcd(numerator, denominator) || 1;
+  return `${numerator / divisor}:${denominator / divisor}`;
 }
 
 export default function RoutesPage() {
