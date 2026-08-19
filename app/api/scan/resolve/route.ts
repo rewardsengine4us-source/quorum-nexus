@@ -109,7 +109,14 @@ export async function POST(req: NextRequest) {
           };
         })
         .filter(Boolean)
-        .sort((a: any, b: any) => b.rate - a.rate)
+        // Rank on the best rate reachable with the card, including a
+        // portal route, so a card that wins only via SmartBuy still
+        // surfaces. `rate` stays the honest tap rate either way.
+        .sort(
+          (a: any, b: any) =>
+            Math.max(b.rate, b.portal?.rate ?? 0) -
+            Math.max(a.rate, a.portal?.rate ?? 0)
+        )
         .slice(0, 8);
     }
 

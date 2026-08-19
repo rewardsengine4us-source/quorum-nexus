@@ -155,7 +155,15 @@ export async function GET(req: NextRequest) {
           };
         })
         .filter(Boolean)
-        .sort((a: any, b: any) => b.rate - a.rate)
+        // Rank on the best rate reachable with the card, not just the
+        // tap rate. HDFC Infinia earns 3.3 at a pharmacy counter but far
+        // more through SmartBuy — ranking on the tap rate alone buries
+        // the card that would actually be the best choice here.
+        .sort(
+          (a: any, b: any) =>
+            Math.max(b.rate, b.portal?.rate ?? 0) -
+            Math.max(a.rate, a.portal?.rate ?? 0)
+        )
         .slice(0, 5);
     }
 
