@@ -39,6 +39,11 @@ export interface ChartResult {
   isDynamic: boolean;
   confidence: string;
   sourceNote: string | null;
+  logoUrl: string | null;
+  /** True only when the figure was checked against a dated source. */
+  pointsVerified: boolean;
+  /** Cash component, which for dynamic programmes often matters more. */
+  taxesNote: string | null;
   /** Populated when the user has a balance in this program. */
   userBalance?: number | null;
   shortfall?: number | null;
@@ -101,14 +106,18 @@ export async function chartsFor(
   const rows = await select(
     "award_charts",
     `from_region=eq.${fromRegion}&to_region=eq.${toRegion}&cabin=eq.${cabin}` +
-      `&select=program_id,points_one_way,points_peak,is_dynamic,confidence,source_note` +
+      `&select=program_id,points_one_way,points_peak,is_dynamic,confidence,source_note,points_verified,taxes_note` +
       `&order=points_one_way.asc`
   );
   if (!rows.length) return [];
 
-  const programs = await select("loyalty_programs", "select=id,program_name");
+  const programs = await select("loyalty_programs", "select=id,program_name,logo_url");
   const nameById: Record<number, string> = {};
-  for (const p of programs) nameById[p.id] = p.program_name;
+  const logoById: Record<number, string | null> = {};
+  for (const p of programs) {
+    nameById[p.id] = p.program_name;
+    logoById[p.id] = p.logo_url ?? null;
+  }
 
   return rows.map((r: any) => ({
     programId: r.program_id,
@@ -118,6 +127,9 @@ export async function chartsFor(
     isDynamic: r.is_dynamic,
     confidence: r.confidence,
     sourceNote: r.source_note,
+    logoUrl: logoById[r.program_id] ?? null,
+    pointsVerified: !!r.points_verified,
+    taxesNote: r.taxes_note ?? null,
   }));
 }
 

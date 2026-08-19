@@ -18,6 +18,7 @@ import type {
   TransferRoute,
 } from "@/lib/types";
 import { formatRatio } from "@/lib/format";
+import Logo from "@/components/Logo";
 
 const RISK_STYLES: Record<string, string> = {
   low: "bg-emerald-950 text-emerald-300 border border-emerald-900",
@@ -306,9 +307,12 @@ function RoutesBody() {
             return (
               <section key={cardId} className="card-surface overflow-hidden rounded-xl">
                 <div className="flex items-baseline justify-between border-b border-base-700/60 px-5 py-3">
-                  <div>
-                    <div className="text-xs text-slate-500">{bank?.bank_name}</div>
-                    <div className="font-medium text-slate-100">{card?.card_name}</div>
+                  <div className="flex items-center gap-2.5">
+                    <Logo src={bank?.icon_url} name={bank?.bank_name ?? "?"} size={24} />
+                    <div>
+                      <div className="text-xs text-slate-500">{bank?.bank_name}</div>
+                      <div className="font-medium text-slate-100">{card?.card_name}</div>
+                    </div>
                   </div>
                   <span className="text-xs text-slate-500">
                     {cardRoutes.length} partner{cardRoutes.length === 1 ? "" : "s"}
@@ -324,9 +328,12 @@ function RoutesBody() {
                         key={route.id}
                         className="grid grid-cols-2 items-center gap-3 px-5 py-3 text-sm sm:grid-cols-[1.6fr_0.7fr_0.7fr_0.6fr_0.7fr_0.9fr]"
                       >
-                        <div className="col-span-2 sm:col-span-1">
-                          <span className="font-medium text-slate-100">{program?.program_name}</span>
-                          <span className="ml-1.5 text-xs text-slate-500">({program?.category})</span>
+                        <div className="col-span-2 flex items-center gap-2 sm:col-span-1">
+                          <Logo src={program?.logo_url} name={program?.program_name ?? "?"} />
+                          <span>
+                            <span className="font-medium text-slate-100">{program?.program_name}</span>
+                            <span className="ml-1.5 text-xs text-slate-500">({program?.category})</span>
+                          </span>
                         </div>
                         <div>
                           <div className="text-[10px] uppercase tracking-wide text-slate-500">

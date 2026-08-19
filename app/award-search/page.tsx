@@ -3,6 +3,7 @@
 import { useState } from "react";
 import RequireEntered from "@/components/RequireEntered";
 import NavBar from "@/components/NavBar";
+import Logo from "@/components/Logo";
 
 interface ChartRow {
   programId: number;
@@ -14,6 +15,9 @@ interface ChartRow {
   sourceNote: string | null;
   userBalance: number | null;
   shortfall: number | null;
+  logoUrl: string | null;
+  pointsVerified: boolean;
+  taxesNote: string | null;
 }
 
 interface LiveRow {
@@ -230,9 +234,13 @@ function AwardSearchBody() {
             Points required
           </h2>
           <p className="mb-4 text-xs text-slate-500">
-            Published award-chart levels for this region pair. Programs marked
-            &ldquo;dynamic&rdquo; price by demand, so treat those as typical
-            saver levels rather than fixed rates.
+            Indicative points levels for this region pair. Rows marked
+            &ldquo;dynamic&rdquo; have no fixed chart — every seat is priced by
+            demand, so the figure is a starting point, not a rate. Rows marked
+            &ldquo;unverified&rdquo; are seeded estimates that haven&rsquo;t been
+            checked against the programme&rsquo;s current chart. Points are also
+            only half the cost: taxes and carrier charges vary enormously by
+            programme and direction.
           </p>
 
           {charts.length === 0 ? (
@@ -259,10 +267,18 @@ function AwardSearchBody() {
                     return (
                       <tr key={chartRow.programId} className="border-t border-base-700/60">
                         <td className="px-4 py-2">
-                          <div className="text-slate-200">{chartRow.programName}</div>
+                          <div className="flex items-center gap-2">
+                            <Logo src={chartRow.logoUrl} name={chartRow.programName} />
+                            <span className="text-slate-200">{chartRow.programName}</span>
+                          </div>
                           {chartRow.sourceNote && (
                             <div className="mt-0.5 text-xs text-slate-500">
                               {chartRow.sourceNote}
+                            </div>
+                          )}
+                          {chartRow.taxesNote && (
+                            <div className="mt-0.5 text-xs text-amber-400/80">
+                              {chartRow.taxesNote}
                             </div>
                           )}
                         </td>
@@ -298,9 +314,9 @@ function AwardSearchBody() {
                                 published chart
                               </span>
                             )}
-                            {chartRow.confidence === "estimated" && (
+                            {!chartRow.pointsVerified && (
                               <span className="pill border border-amber-900 bg-amber-950 text-xs text-amber-300">
-                                estimated — unverified
+                                unverified
                               </span>
                             )}
                           </div>

@@ -32,6 +32,12 @@ export interface CreditCard {
    */
   is_cobranded: boolean | null;
   cobrand_program_code: string | null;
+  /**
+   * Whether this specific product can transfer points to airline/hotel
+   * partners. Entry-level cards earn the same issuer currency but can only
+   * redeem for vouchers. NULL means not yet checked.
+   */
+  transfer_eligible: boolean | null;
 }
 
 export interface LoyaltyProgram {
