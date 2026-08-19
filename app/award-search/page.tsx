@@ -18,6 +18,9 @@ interface ChartRow {
   logoUrl: string | null;
   pointsVerified: boolean;
   taxesNote: string | null;
+  bandName: string | null;
+  distanceMiles: number | null;
+  pricingModel: string | null;
 }
 
 interface LiveRow {
@@ -312,6 +315,11 @@ function AwardSearchBody() {
                             ) : (
                               <span className="pill border border-base-600 bg-base-700 text-xs text-slate-400">
                                 published chart
+                              </span>
+                            )}
+                            {chartRow.bandName && (
+                              <span className="pill border border-base-600 bg-base-700 text-xs text-slate-300">
+                                {chartRow.bandName}
                               </span>
                             )}
                             {!chartRow.pointsVerified && (

@@ -4,6 +4,7 @@ import {
   findAirport,
   chartsFor,
   liveAvailability,
+  distanceMiles,
   CABINS,
   type Cabin,
 } from "@/lib/awards";
@@ -44,7 +45,28 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    const charts = await chartsFor(origin.region, destination.region, cabin);
+    // Distance drives pricing for the Avios family, Aeroplan and Asia
+    // Miles, so compute it once and let chartsFor prefer a band match
+    // over the coarser region-pair figure.
+    const miles =
+      origin.latitude != null &&
+      origin.longitude != null &&
+      destination.latitude != null &&
+      destination.longitude != null
+        ? distanceMiles(
+            Number(origin.latitude),
+            Number(origin.longitude),
+            Number(destination.latitude),
+            Number(destination.longitude)
+          )
+        : null;
+
+    const charts = await chartsFor(
+      origin.region,
+      destination.region,
+      cabin,
+      miles
+    );
 
     // Overlay the user's actual balances so the answer is "can I book this",
     // not just "what does it cost".
@@ -77,6 +99,7 @@ export async function GET(req: NextRequest) {
       destination,
       date: date || null,
       cabin,
+      distanceMiles: miles != null ? Math.round(miles) : null,
       charts: chartsWithBalance,
       live: live.results,
       liveStatus: live.status,
