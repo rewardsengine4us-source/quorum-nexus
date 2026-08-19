@@ -65,6 +65,9 @@ export interface TransferRoute {
   notes: string | null;
   source_type: string | null;
   source_link: string | null;
+  ratio_verified: boolean | null;
+  ratio_verified_at: string | null;
+  ratio_source_url: string | null;
 }
 
 export interface UserRow {

@@ -155,6 +155,11 @@ function RoutesBody() {
     return { cards: byCard.size, partners: filteredRoutes.length };
   }, [filteredRoutes]);
 
+  const unverifiedCount = useMemo(
+    () => filteredRoutes.filter((r) => !r.ratio_verified).length,
+    [filteredRoutes]
+  );
+
   // Group routes under one header per card instead of repeating the
   // "Bank · Card" line on every single partner tile — that repetition was
   // most of what made the old grid feel noisy.
@@ -285,6 +290,15 @@ function RoutesBody() {
             {routeSummary.cards === 1 ? "" : "s"}
           </p>
         )}
+        {unverifiedCount > 0 && (
+          <div className="mt-3 rounded-lg border border-amber-900 bg-amber-950/40 p-3 text-xs text-amber-300">
+            {unverifiedCount} of these {routeSummary.partners} ratios are marked{" "}
+            <span className="font-mono">?</span> — seeded placeholders that
+            haven&rsquo;t been checked against the issuer&rsquo;s current
+            partner table. Treat them as indicative only. Verified ratios carry
+            no marker.
+          </div>
+        )}
         <div className="mt-4 space-y-6">
           {groupedByCard.map(([cardId, cardRoutes]) => {
             const card = cardById.get(cardId);
@@ -314,7 +328,24 @@ function RoutesBody() {
                           <span className="font-medium text-slate-100">{program?.program_name}</span>
                           <span className="ml-1.5 text-xs text-slate-500">({program?.category})</span>
                         </div>
-                        <Metric label="Spend : Get" value={formatRatio(route.transfer_ratio)} />
+                        <div>
+                          <div className="text-[10px] uppercase tracking-wide text-slate-500">
+                            Spend : Get
+                          </div>
+                          <div className="flex items-baseline gap-1">
+                            <span className="font-mono text-slate-200">
+                              {formatRatio(route.transfer_ratio)}
+                            </span>
+                            {!route.ratio_verified && (
+                              <span
+                                title="This ratio has not been checked against an issuer source and may be inaccurate."
+                                className="text-amber-400"
+                              >
+                                ?
+                              </span>
+                            )}
+                          </div>
+                        </div>
                         <Metric
                           label="Bonus"
                           value={route.bonus_percent ? `+${route.bonus_percent}%` : "—"}
