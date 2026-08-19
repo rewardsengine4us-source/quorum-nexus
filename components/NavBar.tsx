@@ -14,6 +14,7 @@ const links = [
   { href: "/loyalty-sync", label: "Sync" },
   { href: "/wishlist", label: "Wishlist" },
   { href: "/redeem", label: "Redeem" },
+  { href: "/alerts", label: "Alerts" },
   { href: "/email-settings", label: "Email" },
 ];
 

@@ -9,6 +9,7 @@ import type {
   UserWishlist,
   VoucherPartner,
   VoucherOrder,
+  DevaluationAlert,
 } from "./types";
 
 // ---------- Banks & Credit Cards (catalog) ----------
@@ -121,6 +122,21 @@ export async function getTransferRoutes(fromCardIds?: number[]) {
   const { data, error } = await query;
   if (error) throw error;
   return data as TransferRoute[];
+}
+
+// ---------- Devaluation alerts ----------
+
+// Only "published" alerts are shown — pending_review rows are drafts we
+// haven't finished sourcing, and surfacing those would put an unverified
+// claim about a partner's pricing in front of users.
+export async function getDevaluationAlerts(): Promise<DevaluationAlert[]> {
+  const { data, error } = await supabase
+    .from("devaluation_alerts")
+    .select("*")
+    .eq("status", "published")
+    .order("effective_date", { ascending: false, nullsFirst: false });
+  if (error) throw error;
+  return data as DevaluationAlert[];
 }
 
 // ---------- Wishlist ----------

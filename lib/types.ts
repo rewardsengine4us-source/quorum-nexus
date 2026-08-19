@@ -144,6 +144,21 @@ export interface VoucherOrder {
   created_at: string | null;
 }
 
+export interface DevaluationAlert {
+  id: number;
+  bank_id: number | null;
+  program_id: number | null;
+  title: string;
+  summary: string | null;
+  source_link: string | null;
+  announced_date: string | null;
+  effective_date: string | null;
+  severity: "low" | "medium" | "high" | null;
+  /** pending_review | published | archived. Only "published" is shown to users. */
+  status: string | null;
+  affected_routes: number[] | null;
+}
+
 // Minimal Database generic so supabase-js's generic client type-checks.
 // (Full `generate_typescript_types` output can replace this later.)
 export type Database = any;
