@@ -113,21 +113,21 @@ export async function findAirport(query: string): Promise<AirportRow | null> {
   if (/^[A-Za-z]{3}$/.test(q)) {
     const byIata = await select(
       "airports",
-      `iata=eq.${q.toUpperCase()}&select=${AIRPORT_COLS}&limit=1`
+      `iata=eq.${q.toUpperCase()}&select=${AIRPORT_COLS}&order=id.asc&limit=1`
     );
     if (byIata.length) return byIata[0] as AirportRow;
   }
 
   const byCity = await select(
     "airports",
-    `city=ilike.${encodeURIComponent(q)}&select=${AIRPORT_COLS}&limit=1`
+    `city=ilike.${encodeURIComponent(q)}&select=${AIRPORT_COLS}&order=id.asc&limit=1`
   );
   if (byCity.length) return byCity[0] as AirportRow;
 
   const fuzzy = await select(
     "airports",
     `or=(city.ilike.*${encodeURIComponent(q)}*,name.ilike.*${encodeURIComponent(q)}*)` +
-      `&select=${AIRPORT_COLS}&limit=1`
+      `&select=${AIRPORT_COLS}&order=id.asc&limit=1`
   );
   return fuzzy.length ? (fuzzy[0] as AirportRow) : null;
 }
@@ -169,7 +169,7 @@ export async function chartsFor(
     logoUrl: logoById[r.program_id] ?? null,
     pricingModel: modelById[r.program_id] ?? null,
     bandName: null,
-    distanceMiles: miles ?? null,
+    distanceMiles: miles != null ? Math.round(miles) : null,
     pointsVerified: !!r.points_verified,
     taxesNote: r.taxes_note ?? null,
   }));
