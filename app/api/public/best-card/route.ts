@@ -163,8 +163,20 @@ export async function GET(req: NextRequest) {
           (a: any, b: any) =>
             Math.max(b.rate, b.portal?.rate ?? 0) -
             Math.max(a.rate, a.portal?.rate ?? 0)
-        )
-        .slice(0, 5);
+        );
+
+      const top = cards.slice(0, 5);
+
+      // A card whose accelerator has an unconfirmed multiplier cannot be
+      // ranked on it — we would be asserting a number we don't have. But
+      // dropping it entirely hides a real partnership the user could act
+      // on, so append those separately, capped, and clearly caveated.
+      const extraPartners = cards
+        .slice(5)
+        .filter((c: any) => c.portal && c.portal.rate == null)
+        .slice(0, 3);
+
+      cards = [...top, ...extraPartners];
     }
 
     return NextResponse.json(

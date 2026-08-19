@@ -116,8 +116,14 @@ export async function POST(req: NextRequest) {
           (a: any, b: any) =>
             Math.max(b.rate, b.portal?.rate ?? 0) -
             Math.max(a.rate, a.portal?.rate ?? 0)
-        )
-        .slice(0, 8);
+        );
+
+      const top = cards.slice(0, 8);
+      const extraPartners = cards
+        .slice(8)
+        .filter((c: any) => c.portal && c.portal.rate == null)
+        .slice(0, 3);
+      cards = [...top, ...extraPartners];
     }
 
     return NextResponse.json({
