@@ -1,0 +1,21 @@
+{
+  "manifest_version": 3,
+  "name": "Quorum Nexus — Best Card at Checkout",
+  "version": "0.1.0",
+  "description": "Shows which of your cards earns the most at the site you're on, before you check out.",
+  "action": {
+    "default_popup": "popup.html"
+  },
+  "permissions": ["activeTab", "storage"],
+  "host_permissions": ["https://quorum-nexus.vercel.app/*"],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}

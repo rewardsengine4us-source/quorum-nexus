@@ -74,22 +74,48 @@ function ScanBody() {
   const [cards, setCards] = useState<CardHit[]>([]);
 
   const [cameraOn, setCameraOn] = useState(false);
-  const [cameraSupported, setCameraSupported] = useState(false);
+  const [cameraStarting, setCameraStarting] = useState(false);
+  const [scanEngine, setScanEngine] = useState<"native" | "jsqr" | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const rafRef = useRef<number | null>(null);
+  const jsQrRef = useRef<any>(null);
 
   useEffect(() => {
-    // BarcodeDetector is native in Chrome/Edge/Android. Safari and Firefox
-    // don't have it, so those users get manual entry rather than a broken
-    // camera button.
-    setCameraSupported(
-      typeof window !== "undefined" && "BarcodeDetector" in window
-    );
     return () => stopCamera();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // jsQR is loaded from a CDN on first use rather than bundled, so browsers
+  // that DO have the native BarcodeDetector (Chrome/Edge/Android) never pay
+  // for it. Safari and Firefox have no BarcodeDetector at all, so without
+  // this fallback camera scanning simply doesn't work there.
+  function loadJsQr(): Promise<any> {
+    return new Promise((resolvePromise, rejectPromise) => {
+      if (jsQrRef.current) return resolvePromise(jsQrRef.current);
+      if ((window as any).jsQR) {
+        jsQrRef.current = (window as any).jsQR;
+        return resolvePromise(jsQrRef.current);
+      }
+      const script = document.createElement("script");
+      script.src = "https://cdnjs.cloudflare.com/ajax/libs/jsQR/1.4.0/jsQR.js";
+      script.async = true;
+      script.onload = () => {
+        jsQrRef.current = (window as any).jsQR;
+        if (jsQrRef.current) resolvePromise(jsQrRef.current);
+        else rejectPromise(new Error("QR library failed to initialize"));
+      };
+      script.onerror = () => rejectPromise(new Error("Could not load QR library"));
+      document.head.appendChild(script);
+    });
+  }
+
   function stopCamera() {
+    if (rafRef.current !== null) {
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = null;
+    }
     streamRef.current?.getTracks().forEach((t) => t.stop());
     streamRef.current = null;
     setCameraOn(false);
@@ -97,6 +123,7 @@ function ScanBody() {
 
   async function startCamera() {
     setError(null);
+    setCameraStarting(true);
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: "environment" },
@@ -108,26 +135,62 @@ function ScanBody() {
         await videoRef.current.play();
       }
 
-      const Detector = (window as any).BarcodeDetector;
-      const detector = new Detector({ formats: ["qr_code"] });
+      const hasNative = typeof window !== "undefined" && "BarcodeDetector" in window;
 
-      const tick = async () => {
-        if (!streamRef.current || !videoRef.current) return;
-        try {
-          const codes = await detector.detect(videoRef.current);
-          if (codes?.length) {
-            const value = codes[0].rawValue as string;
-            setQr(value);
-            stopCamera();
-            void resolve(value);
-            return;
+      if (hasNative) {
+        setScanEngine("native");
+        const Detector = (window as any).BarcodeDetector;
+        const detector = new Detector({ formats: ["qr_code"] });
+
+        const tick = async () => {
+          if (!streamRef.current || !videoRef.current) return;
+          try {
+            const codes = await detector.detect(videoRef.current);
+            if (codes?.length) {
+              const value = codes[0].rawValue as string;
+              setQr(value);
+              stopCamera();
+              void resolve(value);
+              return;
+            }
+          } catch {
+            // Detection can throw on a frame that isn't ready yet; keep going.
           }
-        } catch {
-          // Detection can throw on a frame that isn't ready yet; keep going.
-        }
-        requestAnimationFrame(tick);
-      };
-      requestAnimationFrame(tick);
+          rafRef.current = requestAnimationFrame(tick);
+        };
+        rafRef.current = requestAnimationFrame(tick);
+      } else {
+        // Fallback path: decode frames ourselves via jsQR on an offscreen
+        // canvas. Slower than native detection but works in every browser
+        // that can open a camera at all.
+        const jsQR = await loadJsQr();
+        setScanEngine("jsqr");
+        const canvas = canvasRef.current ?? document.createElement("canvas");
+        canvasRef.current = canvas;
+        const ctx = canvas.getContext("2d", { willReadFrequently: true });
+
+        const tick = () => {
+          const video = videoRef.current;
+          if (!streamRef.current || !video || !ctx) return;
+          if (video.readyState === video.HAVE_ENOUGH_DATA) {
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            const frame = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const code = jsQR(frame.data, frame.width, frame.height, {
+              inversionAttempts: "dontInvert",
+            });
+            if (code?.data) {
+              setQr(code.data);
+              stopCamera();
+              void resolve(code.data);
+              return;
+            }
+          }
+          rafRef.current = requestAnimationFrame(tick);
+        };
+        rafRef.current = requestAnimationFrame(tick);
+      }
     } catch (e: any) {
       setError(
         e?.name === "NotAllowedError"
@@ -135,6 +198,8 @@ function ScanBody() {
           : `Could not start the camera: ${e.message}`
       );
       stopCamera();
+    } finally {
+      setCameraStarting(false);
     }
   }
 
@@ -176,12 +241,13 @@ function ScanBody() {
 
       <div className="card-surface mt-6 rounded-xl p-5">
         <div className="flex flex-wrap items-center gap-2">
-          {cameraSupported && !cameraOn && (
+          {!cameraOn && (
             <button
               onClick={startCamera}
-              className="rounded-md bg-accent-500 px-4 py-2 text-sm font-medium text-base-950 hover:bg-accent-400"
+              disabled={cameraStarting}
+              className="rounded-md bg-accent-500 px-4 py-2 text-sm font-medium text-base-950 hover:bg-accent-400 disabled:opacity-40"
             >
-              Scan with camera
+              {cameraStarting ? "Starting camera…" : "Scan with camera"}
             </button>
           )}
           {cameraOn && (
@@ -191,6 +257,11 @@ function ScanBody() {
             >
               Stop camera
             </button>
+          )}
+          {cameraOn && scanEngine && (
+            <span className="text-xs text-slate-600">
+              {scanEngine === "native" ? "native scanner" : "compatibility scanner"}
+            </span>
           )}
           <div className="flex overflow-hidden rounded-md border border-base-700 text-xs">
             <button
@@ -219,9 +290,7 @@ function ScanBody() {
 
         <div className="mt-4">
           <span className="mb-1.5 block text-xs font-medium text-slate-400">
-            {cameraSupported
-              ? "Or paste the QR contents"
-              : "Paste the QR contents (this browser has no built-in QR reader)"}
+            Or paste the QR contents
           </span>
           <div className="flex gap-2">
             <input

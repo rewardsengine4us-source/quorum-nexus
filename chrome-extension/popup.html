@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <style>
+    :root { color-scheme: dark; }
+    * { box-sizing: border-box; }
+    body {
+      width: 320px;
+      margin: 0;
+      padding: 16px;
+      background: #0b0f16;
+      color: #e2e8f0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      font-size: 13px;
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-weight: 600;
+      font-size: 13px;
+      margin-bottom: 12px;
+      color: #f1f5f9;
+    }
+    .brand .dot {
+      width: 7px; height: 7px; border-radius: 50%;
+      background: #22c55e;
+    }
+    .merchant {
+      font-size: 11px;
+      color: #64748b;
+      margin-bottom: 10px;
+    }
+    .state {
+      padding: 20px 0;
+      text-align: center;
+      color: #64748b;
+    }
+    .card {
+      border: 1px solid #1e293b;
+      border-left: 2px solid #22c55e;
+      border-radius: 8px;
+      padding: 12px;
+      background: #111827;
+    }
+    .card .bank { font-size: 11px; color: #64748b; }
+    .card .name { font-size: 14px; font-weight: 500; color: #f1f5f9; margin-top: 2px; }
+    .card .rate { font-family: ui-monospace, monospace; color: #4ade80; margin-top: 4px; font-size: 13px; }
+    .pill {
+      display: inline-block;
+      font-size: 10px;
+      border: 1px solid #064e3b;
+      background: #052e1f;
+      color: #6ee7b7;
+      padding: 1px 6px;
+      border-radius: 999px;
+      margin-top: 6px;
+    }
+    .alt-list { margin-top: 10px; border-top: 1px solid #1e293b; padding-top: 8px; }
+    .alt-row {
+      display: flex; justify-content: space-between; align-items: baseline;
+      padding: 4px 0; font-size: 12px;
+    }
+    .alt-row .n { color: #cbd5e1; }
+    .alt-row .r { font-family: ui-monospace, monospace; color: #94a3b8; }
+    .footer {
+      margin-top: 12px;
+      font-size: 10px;
+      color: #475569;
+      text-align: center;
+    }
+    .footer a { color: #64748b; }
+  </style>
+</head>
+<body>
+  <div class="brand"><span class="dot"></span>Quorum Nexus</div>
+  <div id="merchant" class="merchant"></div>
+  <div id="content" class="state">Reading this page…</div>
+  <div class="footer">Ranked against the full card catalog — not just your wallet. <a href="https://quorum-nexus.vercel.app/scan" target="_blank">Link your cards →</a></div>
+  <script src="popup.js"></script>
+</body>
+</html>

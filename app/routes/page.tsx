@@ -155,6 +155,19 @@ function RoutesBody() {
     return { cards: byCard.size, partners: filteredRoutes.length };
   }, [filteredRoutes]);
 
+  // Group routes under one header per card instead of repeating the
+  // "Bank · Card" line on every single partner tile — that repetition was
+  // most of what made the old grid feel noisy.
+  const groupedByCard = useMemo(() => {
+    const groups = new Map<number, TransferRoute[]>();
+    for (const r of filteredRoutes) {
+      const list = groups.get(r.from_card_id) ?? [];
+      list.push(r);
+      groups.set(r.from_card_id, list);
+    }
+    return [...groups.entries()];
+  }, [filteredRoutes]);
+
   return (
     <main className="mx-auto max-w-6xl px-6 py-10">
       <h1 className="text-2xl font-semibold text-slate-50">Transfer Route Explorer</h1>
@@ -272,50 +285,56 @@ function RoutesBody() {
             {routeSummary.cards === 1 ? "" : "s"}
           </p>
         )}
-        <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
-          {filteredRoutes.map((route) => {
-            const card = cardById.get(route.from_card_id);
+        <div className="mt-4 space-y-6">
+          {groupedByCard.map(([cardId, cardRoutes]) => {
+            const card = cardById.get(cardId);
             const bank = card ? bankById.get(card.bank_id) : undefined;
-            const program = programById.get(route.to_program_id);
-            const risk = (route.devaluation_risk ?? "low").toLowerCase();
             return (
-              <div key={route.id} className="card-surface rounded-xl p-5">
-                <div className="flex items-start justify-between">
+              <section key={cardId} className="card-surface overflow-hidden rounded-xl">
+                <div className="flex items-baseline justify-between border-b border-base-700/60 px-5 py-3">
                   <div>
-                    <div className="text-xs text-slate-500">
-                      {bank?.bank_name} · {card?.card_name}
-                    </div>
-                    <div className="mt-1 flex items-center gap-2 text-slate-100">
-                      <span className="font-medium">{program?.program_name}</span>
-                      <span className="text-xs text-slate-500">({program?.category})</span>
-                    </div>
+                    <div className="text-xs text-slate-500">{bank?.bank_name}</div>
+                    <div className="font-medium text-slate-100">{card?.card_name}</div>
                   </div>
-                  <span className={`pill ${RISK_STYLES[risk] ?? RISK_STYLES.low}`}>
-                    {risk} risk
+                  <span className="text-xs text-slate-500">
+                    {cardRoutes.length} partner{cardRoutes.length === 1 ? "" : "s"}
                   </span>
                 </div>
 
-                <div className="mt-4 grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
-                  <Metric label="Ratio" value={formatRatio(route.transfer_ratio)} />
-                  <Metric
-                    label="Bonus"
-                    value={route.bonus_percent ? `+${route.bonus_percent}%` : "—"}
-                    highlight={!!route.bonus_percent}
-                  />
-                  <Metric label="Health" value={`${route.health_score ?? "—"}/100`} />
-                  <Metric
-                    label="Processing"
-                    value={route.processing_time_days ? `${route.processing_time_days}d` : "—"}
-                  />
+                <div className="divide-y divide-base-700/60">
+                  {cardRoutes.map((route) => {
+                    const program = programById.get(route.to_program_id);
+                    const risk = (route.devaluation_risk ?? "low").toLowerCase();
+                    return (
+                      <div
+                        key={route.id}
+                        className="grid grid-cols-2 items-center gap-3 px-5 py-3 text-sm sm:grid-cols-[1.6fr_0.7fr_0.7fr_0.6fr_0.7fr_0.9fr]"
+                      >
+                        <div className="col-span-2 sm:col-span-1">
+                          <span className="font-medium text-slate-100">{program?.program_name}</span>
+                          <span className="ml-1.5 text-xs text-slate-500">({program?.category})</span>
+                        </div>
+                        <Metric label="Ratio" value={formatRatio(route.transfer_ratio)} />
+                        <Metric
+                          label="Bonus"
+                          value={route.bonus_percent ? `+${route.bonus_percent}%` : "—"}
+                          highlight={!!route.bonus_percent}
+                        />
+                        <Metric label="Health" value={`${route.health_score ?? "—"}/100`} />
+                        <Metric
+                          label="Processing"
+                          value={route.processing_time_days ? `${route.processing_time_days}d` : "—"}
+                        />
+                        <div className="flex justify-start sm:justify-end">
+                          <span className={`pill text-xs ${RISK_STYLES[risk] ?? RISK_STYLES.low}`}>
+                            {risk} risk
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
-
-                {(route.sweet_spot_min_points || route.sweet_spot_max_points) && (
-                  <div className="mt-3 text-xs text-slate-500">
-                    Sweet spot: {route.sweet_spot_min_points?.toLocaleString() ?? "0"} –{" "}
-                    {route.sweet_spot_max_points?.toLocaleString() ?? "∞"} points
-                  </div>
-                )}
-              </div>
+              </section>
             );
           })}
           {filteredRoutes.length === 0 && (
