@@ -4,6 +4,14 @@ import { useEffect, useRef, useState } from "react";
 import RequireEntered from "@/components/RequireEntered";
 import NavBar from "@/components/NavBar";
 
+interface PortalBoost {
+  name: string;
+  rate: number | null;
+  multiplier: number | null;
+  verified: boolean;
+  notes: string | null;
+}
+
 interface CardHit {
   cardId: number;
   cardName: string;
@@ -11,6 +19,7 @@ interface CardHit {
   rate: number;
   isAccelerated: boolean;
   notes: string | null;
+  portal: PortalBoost | null;
 }
 
 interface Resolution {
@@ -399,6 +408,22 @@ function ScanBody() {
             </div>
             {best.notes && (
               <p className="mt-2 text-xs text-slate-500">{best.notes}</p>
+            )}
+
+            {best.portal && (
+              <div className="mt-3 rounded-md border border-gold-400/30 bg-base-800/60 p-3">
+                <div className="text-xs font-medium text-gold-400">
+                  {best.portal.rate != null
+                    ? `${best.portal.rate}× per ₹100 via ${best.portal.name}`
+                    : `${best.portal.name} partner`}
+                </div>
+                <p className="mt-1 text-xs text-slate-500">
+                  {best.portal.verified
+                    ? "Tapping the card here earns the rate above. Routing the same purchase through the portal earns this instead."
+                    : "This merchant is a listed portal partner, but we haven't confirmed the multiplier — check the portal before assuming a higher rate."}
+                  {best.portal.notes ? ` ${best.portal.notes}` : ""}
+                </p>
+              </div>
             )}
           </div>
 

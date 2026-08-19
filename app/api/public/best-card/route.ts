@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { select } from "@/lib/db";
 import { resolveMcc, type MerchantRow, type MccRow } from "@/lib/upi";
+import { portalBoostsFor } from "@/lib/rewards";
 
 // Public, unauthenticated endpoint for the Chrome extension. The extension
 // runs on the user's machine with no server session, so this can't use the
@@ -123,16 +124,34 @@ export async function GET(req: NextRequest) {
         if (!best.has(cardId)) best.set(cardId, { ...info, category: "base" });
       }
 
+      const boosts = await portalBoostsFor(
+        resolution.category,
+        resolution.merchantName ?? merchant
+      );
+
       const cardById = new Map(allCards.map((c: any) => [c.id, c]));
       cards = [...best.entries()]
         .map(([cardId, info]) => {
           const card = cardById.get(cardId);
           if (!card) return null;
+          const boost = boosts.get(cardId);
           return {
             cardName: card.card_name,
             bankName: bankName[card.bank_id] ?? "",
             rate: info.rate,
             isAccelerated: info.category !== "base",
+            // Reported separately from `rate`: the accelerator only pays
+            // out if the purchase is routed through the portal, so it
+            // must not be presented as the rate earned by tapping.
+            portal: boost
+              ? {
+                  name: boost.portalName,
+                  rate: boost.effectiveRate,
+                  multiplier: boost.multiplier,
+                  verified: boost.verified,
+                  notes: boost.notes,
+                }
+              : null,
           };
         })
         .filter(Boolean)
