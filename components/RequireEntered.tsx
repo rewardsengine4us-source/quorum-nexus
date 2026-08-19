@@ -17,7 +17,7 @@ export default function RequireEntered({ children }: { children: React.ReactNode
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (!active) return;
       if (!session) {
-        router.replace("/");
+        router.replace("/login");
       } else {
         setReady(true);
       }
@@ -30,7 +30,7 @@ export default function RequireEntered({ children }: { children: React.ReactNode
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
       if (!session) {
-        router.replace("/");
+        router.replace("/login");
       }
     });
 
