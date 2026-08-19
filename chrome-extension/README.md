@@ -23,9 +23,7 @@ no cookies, no data stored beyond the current tab's merchant/domain in memory.
 - No Chrome Web Store listing — this loads as an unpacked/dev extension only,
   which caps installs at people who load it manually. Publishing needs a
   one-time $5 Chrome Web Store developer registration and a review pass
-  (usually a few days), plus real icon assets (see below).
-- Icons are currently omitted from the manifest — Chrome shows its default
-  puzzle-piece icon. Needs real 16/48/128px PNGs before a store listing.
+  (usually a few days).
 
 ## Local install (for testing)
 

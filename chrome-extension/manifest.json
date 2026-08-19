@@ -3,8 +3,18 @@
   "name": "Quorum Nexus — Best Card at Checkout",
   "version": "0.1.0",
   "description": "Shows which of your cards earns the most at the site you're on, before you check out.",
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
   "action": {
-    "default_popup": "popup.html"
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
   },
   "permissions": ["activeTab", "storage"],
   "host_permissions": ["https://quorum-nexus.vercel.app/*"],
