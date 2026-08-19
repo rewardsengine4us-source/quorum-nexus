@@ -6,7 +6,7 @@
 //   Next.js Route. "runSync" is not a valid Route export field.
 
 import { google } from "googleapis";
-import { select, selectOne, upsert, patch, DEMO_USER_ID } from "@/lib/db";
+import { select, selectOne, upsert, patch } from "@/lib/db";
 import {
   htmlToText,
   parseEmail,
@@ -87,10 +87,10 @@ export interface SyncResult {
   programsTouched: number;
 }
 
-export async function runSync(): Promise<SyncResult> {
+export async function runSync(userId: string): Promise<SyncResult> {
   const connection = await selectOne(
     "email_connections",
-    `user_id=eq.${DEMO_USER_ID}&oauth_provider=eq.gmail&select=*`
+    `user_id=eq.${userId}&oauth_provider=eq.gmail&select=*`
   );
   if (!connection) {
     throw new Error("No Gmail connection found. Connect Gmail first.");
@@ -130,7 +130,7 @@ export async function runSync(): Promise<SyncResult> {
 
   const alreadyLogged = await select(
     "email_parsing_logs",
-    `user_id=eq.${DEMO_USER_ID}&select=email_id`
+    `user_id=eq.${userId}&select=email_id`
   );
   const loggedIds = new Set(alreadyLogged.map((r: any) => r.email_id));
   const candidateIds = [...seenIds].filter((id) => !loggedIds.has(id));
@@ -220,7 +220,7 @@ export async function runSync(): Promise<SyncResult> {
     }
 
     logRows.push({
-      user_id: DEMO_USER_ID,
+      user_id: userId,
       email_id: id,
       email_subject: subject,
       sender: from,
@@ -248,7 +248,7 @@ export async function runSync(): Promise<SyncResult> {
     await upsert(
       "user_points",
       {
-        user_id: DEMO_USER_ID,
+        user_id: userId,
         program_id: Number(programId),
         total_points: value,
         last_updated: new Date().toISOString(),
@@ -261,7 +261,7 @@ export async function runSync(): Promise<SyncResult> {
     await upsert(
       "user_cards",
       {
-        user_id: DEMO_USER_ID,
+        user_id: userId,
         credit_card_id: cardId,
         notes: last4
           ? `Detected in your inbox - ending ${last4}`

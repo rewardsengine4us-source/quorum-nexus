@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { select, DEMO_USER_ID } from "@/lib/db";
+import { select } from "@/lib/db";
+import { getSessionUserId } from "@/lib/supabaseServer";
 import { parseUpiQr, resolveMcc } from "@/lib/upi";
 import { portalBoostsFor } from "@/lib/rewards";
 
@@ -46,9 +47,16 @@ export async function POST(req: NextRequest) {
 
       let allowedIds: Set<number> | null = null;
       if (scope === "mine") {
+        const userId = await getSessionUserId();
+        if (!userId) {
+          return NextResponse.json(
+            { error: "Sign in to scan against your own linked cards." },
+            { status: 401 }
+          );
+        }
         const linked = await select(
           "user_cards",
-          `user_id=eq.${DEMO_USER_ID}&select=credit_card_id`
+          `user_id=eq.${userId}&select=credit_card_id`
         );
         allowedIds = new Set(linked.map((l: any) => l.credit_card_id));
       }

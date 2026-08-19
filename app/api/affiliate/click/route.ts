@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { select, selectOne, insert, DEMO_USER_ID } from "@/lib/db";
+import { select, selectOne, insert } from "@/lib/db";
+import { getSessionUserId } from "@/lib/supabaseServer";
 
 /**
  * Records an apply-click and redirects to the destination.
@@ -42,11 +43,17 @@ export async function GET(req: NextRequest) {
       );
     }
 
+    // Attribution is best-effort: an anonymous click (no session, e.g. the
+    // Chrome extension or a logged-out visitor) is still recorded with a
+    // null user_id rather than dropped, since the click itself matters for
+    // conversion tracking even when we don't know who made it.
+    const userId = await getSessionUserId();
+
     // Fire-and-forget: a tracking failure must never block the redirect.
     insert("affiliate_clicks", {
       offer_id: offer?.id ?? null,
       credit_card_id: cardId,
-      user_id: DEMO_USER_ID,
+      user_id: userId,
       referrer: req.headers.get("referer"),
       device_hint: /mobile/i.test(req.headers.get("user-agent") ?? "")
         ? "mobile"

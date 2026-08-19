@@ -1,4 +1,4 @@
-import { createClient } from "@supabase/supabase-js";
+import { createBrowserClient } from "@supabase/ssr";
 import type { Database } from "./types";
 
 const rawUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
@@ -43,10 +43,9 @@ if (!supabaseAnonKey) {
   );
 }
 
-export const supabase = createClient<Database>(safeUrl(rawUrl), supabaseAnonKey);
-
-// There is no real authentication in this build (dummy Enter gate).
-// Every read/write in the app is scoped to this fixed demo user id,
-// which matches the row seeded in `public.users` and the RLS policies
-// applied alongside it.
-export const DEMO_USER_ID = "demo-user-001";
+// createBrowserClient (not the plain createClient) stores the session in
+// cookies rather than localStorage, so the server-side client in
+// lib/supabaseServer.ts can read the same session from the request —
+// required for API routes to know who's calling without trusting a
+// client-supplied user id.
+export const supabase = createBrowserClient<Database>(safeUrl(rawUrl), supabaseAnonKey);

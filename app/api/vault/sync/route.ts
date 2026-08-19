@@ -1,13 +1,28 @@
 import { NextRequest, NextResponse } from "next/server";
 import { runSyncFor, dueForSync } from "@/lib/vault";
 import { safeEqual } from "@/lib/crypto";
+import { getSessionUserId } from "@/lib/supabaseServer";
+import { selectOne } from "@/lib/db";
 
 export const maxDuration = 60;
 
 /**
  * Manual "sync now" for a single credential.
+ *
+ * runSyncFor() itself doesn't take a user id — it trusts whatever
+ * credentialId it's given and resolves the owning row internally. That's
+ * correct for the cron path below (system-triggered, iterates every due
+ * credential regardless of owner), but wrong for a request coming from a
+ * signed-in browser: without an ownership check here, any logged-in user
+ * could trigger a sync against another user's credentialId just by
+ * guessing a small integer.
  */
 export async function POST(req: NextRequest) {
+  const userId = await getSessionUserId();
+  if (!userId) {
+    return NextResponse.json({ error: "Not signed in." }, { status: 401 });
+  }
+
   try {
     const { credentialId } = await req.json();
     if (!credentialId) {
@@ -16,6 +31,18 @@ export async function POST(req: NextRequest) {
         { status: 400 }
       );
     }
+
+    const owned = await selectOne(
+      "loyalty_credentials",
+      `id=eq.${Number(credentialId)}&user_id=eq.${userId}&select=id`
+    );
+    if (!owned) {
+      return NextResponse.json(
+        { error: "Credential not found." },
+        { status: 404 }
+      );
+    }
+
     const outcome = await runSyncFor(Number(credentialId), "manual");
     return NextResponse.json(outcome);
   } catch (err: any) {

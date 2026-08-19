@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import RequireEntered from "@/components/RequireEntered";
 import NavBar from "@/components/NavBar";
+import { supabase } from "@/lib/supabaseClient";
 import {
   getUserCards,
   getUserPoints,
@@ -53,22 +54,25 @@ function DashboardBody() {
   const [cards, setCards] = useState<CreditCard[]>([]);
   const [banks, setBanks] = useState<Bank[]>([]);
   const [programs, setPrograms] = useState<LoyaltyProgram[]>([]);
+  const [email, setEmail] = useState<string | null>(null);
 
   useEffect(() => {
     (async () => {
       try {
-        const [uc, up, cc, bk, lp] = await Promise.all([
+        const [uc, up, cc, bk, lp, session] = await Promise.all([
           getUserCards(),
           getUserPoints(),
           getCreditCards(),
           getBanks(),
           getLoyaltyPrograms(),
+          supabase.auth.getUser(),
         ]);
         setUserCards(uc);
         setPoints(up);
         setCards(cc);
         setBanks(bk);
         setPrograms(lp);
+        setEmail(session.data.user?.email ?? null);
       } catch (e: any) {
         setError(friendlyDashboardError(e?.message));
       } finally {
@@ -86,7 +90,7 @@ function DashboardBody() {
   return (
     <main className="mx-auto max-w-6xl px-6 py-10">
       <h1 className="text-2xl font-semibold text-slate-50">Dashboard</h1>
-      <p className="mt-1 text-sm text-slate-500">Demo account · demo-user-001</p>
+      {email && <p className="mt-1 text-sm text-slate-500">{email}</p>}
 
       {error && (
         <div className="mt-6 rounded-lg border border-red-900 bg-red-950/40 p-4 text-sm text-red-300">

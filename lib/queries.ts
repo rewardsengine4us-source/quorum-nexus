@@ -1,4 +1,4 @@
-import { supabase, DEMO_USER_ID } from "./supabaseClient";
+import { supabase } from "./supabaseClient";
 import type {
   Bank,
   CreditCard,
@@ -11,6 +11,26 @@ import type {
   VoucherOrder,
   DevaluationAlert,
 } from "./types";
+
+// ---------- Session ----------
+
+/**
+ * The signed-in user's id, or throws.
+ *
+ * RLS policies on every user-owned table now key on auth.uid(), so reads
+ * are automatically scoped without an explicit .eq("user_id", ...) — the
+ * database enforces it, not application code. Writes still need the id
+ * explicitly in the row payload (RLS's WITH CHECK compares against
+ * whatever is submitted, it can't fill it in for you), so every insert
+ * below fetches it here rather than trusting a caller-supplied value.
+ */
+async function requireUserId(): Promise<string> {
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) throw new Error("Not signed in.");
+  return user.id;
+}
 
 // ---------- Banks & Credit Cards (catalog) ----------
 
@@ -36,20 +56,22 @@ export async function getCreditCards() {
 
 // ---------- Linked cards ----------
 
+// No .eq("user_id", ...) here or elsewhere below — RLS restricts every
+// select to rows owned by the caller's session automatically.
 export async function getUserCards(): Promise<UserCard[]> {
   const { data, error } = await supabase
     .from("user_cards")
     .select("*")
-    .eq("user_id", DEMO_USER_ID)
     .order("added_at", { ascending: false });
   if (error) throw error;
   return data as UserCard[];
 }
 
 export async function addUserCard(creditCardId: number) {
+  const userId = await requireUserId();
   const { data, error } = await supabase
     .from("user_cards")
-    .insert({ user_id: DEMO_USER_ID, credit_card_id: creditCardId })
+    .insert({ user_id: userId, credit_card_id: creditCardId })
     .select()
     .single();
   if (error) throw error;
@@ -57,31 +79,25 @@ export async function addUserCard(creditCardId: number) {
 }
 
 export async function removeUserCard(id: number) {
-  const { error } = await supabase
-    .from("user_cards")
-    .delete()
-    .eq("id", id)
-    .eq("user_id", DEMO_USER_ID);
+  const { error } = await supabase.from("user_cards").delete().eq("id", id);
   if (error) throw error;
 }
 
 // ---------- Points balances ----------
 
 export async function getUserPoints(): Promise<UserPoints[]> {
-  const { data, error } = await supabase
-    .from("user_points")
-    .select("*")
-    .eq("user_id", DEMO_USER_ID);
+  const { data, error } = await supabase.from("user_points").select("*");
   if (error) throw error;
   return data as UserPoints[];
 }
 
 export async function upsertUserPoints(programId: number, totalPoints: number) {
+  const userId = await requireUserId();
   const { data, error } = await supabase
     .from("user_points")
     .upsert(
       {
-        user_id: DEMO_USER_ID,
+        user_id: userId,
         program_id: programId,
         total_points: totalPoints,
         last_updated: new Date().toISOString(),
@@ -145,7 +161,6 @@ export async function getWishlist(): Promise<UserWishlist[]> {
   const { data, error } = await supabase
     .from("user_wishlists")
     .select("*")
-    .eq("user_id", DEMO_USER_ID)
     .order("priority", { ascending: false });
   if (error) throw error;
   return data as UserWishlist[];
@@ -158,9 +173,10 @@ export async function addWishlistItem(item: {
   estimated_points_needed?: number | null;
   priority?: number;
 }) {
+  const userId = await requireUserId();
   const { data, error } = await supabase
     .from("user_wishlists")
-    .insert({ user_id: DEMO_USER_ID, ...item })
+    .insert({ user_id: userId, ...item })
     .select()
     .single();
   if (error) throw error;
@@ -168,11 +184,7 @@ export async function addWishlistItem(item: {
 }
 
 export async function deleteWishlistItem(id: number) {
-  const { error } = await supabase
-    .from("user_wishlists")
-    .delete()
-    .eq("id", id)
-    .eq("user_id", DEMO_USER_ID);
+  const { error } = await supabase.from("user_wishlists").delete().eq("id", id);
   if (error) throw error;
 }
 
@@ -192,7 +204,6 @@ export async function getVoucherOrders(): Promise<VoucherOrder[]> {
   const { data, error } = await supabase
     .from("voucher_orders")
     .select("*")
-    .eq("user_id", DEMO_USER_ID)
     .order("created_at", { ascending: false });
   if (error) throw error;
   return data as VoucherOrder[];
@@ -202,10 +213,11 @@ export async function getVoucherOrders(): Promise<VoucherOrder[]> {
 // completed order entirely within the app's own database so the
 // redemption flow can be demonstrated end-to-end.
 export async function createDemoVoucherOrder(partnerId: number, denomination: number) {
+  const userId = await requireUserId();
   const { data: order, error: insertError } = await supabase
     .from("voucher_orders")
     .insert({
-      user_id: DEMO_USER_ID,
+      user_id: userId,
       partner_id: partnerId,
       denomination,
       purchase_price: denomination,

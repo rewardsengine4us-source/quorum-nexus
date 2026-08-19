@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { google } from "googleapis";
-import { del, insert, DEMO_USER_ID } from "@/lib/db";
+import { del, insert } from "@/lib/db";
+import { getSessionUserId } from "@/lib/supabaseServer";
 
 const oauth2Client = new google.auth.OAuth2(
   process.env.GOOGLE_CLIENT_ID!,
@@ -19,6 +20,16 @@ export async function GET(req: NextRequest) {
   if (error) return redirect(req, `/email-settings?error=${error}`);
   if (!code) return redirect(req, `/email-settings?error=no_code`);
 
+  // Read the session directly rather than trusting anything that
+  // round-tripped through Google's redirect — the browser making this
+  // request still carries the same Quorum Nexus session cookie it had
+  // when the flow started, since Google redirects the user's own browser
+  // back here.
+  const userId = await getSessionUserId();
+  if (!userId) {
+    return redirect(req, `/?error=${encodeURIComponent("Session expired. Sign in again before connecting Gmail.")}`);
+  }
+
   try {
     const { tokens } = await oauth2Client.getToken(code);
     oauth2Client.setCredentials(tokens);
@@ -31,10 +42,10 @@ export async function GET(req: NextRequest) {
     // accumulating duplicate rows across reconnects.
     await del(
       "email_connections",
-      `user_id=eq.${DEMO_USER_ID}&oauth_provider=eq.gmail`
+      `user_id=eq.${userId}&oauth_provider=eq.gmail`
     );
     await insert("email_connections", {
-      user_id: DEMO_USER_ID,
+      user_id: userId,
       oauth_provider: "gmail",
       email,
       access_token: tokens.access_token || "",

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { select, DEMO_USER_ID } from "@/lib/db";
+import { select } from "@/lib/db";
+import { getSessionUserId } from "@/lib/supabaseServer";
 import {
   findAirport,
   chartsFor,
@@ -69,11 +70,16 @@ export async function GET(req: NextRequest) {
     );
 
     // Overlay the user's actual balances so the answer is "can I book this",
-    // not just "what does it cost".
-    const balances = await select(
-      "user_points",
-      `user_id=eq.${DEMO_USER_ID}&select=program_id,total_points`
-    );
+    // not just "what does it cost" — but only when signed in. An
+    // unauthenticated search still returns full chart pricing; it just
+    // can't say what the visitor personally holds.
+    const userId = await getSessionUserId();
+    const balances = userId
+      ? await select(
+          "user_points",
+          `user_id=eq.${userId}&select=program_id,total_points`
+        )
+      : [];
     const balanceByProgram: Record<number, number> = {};
     for (const b of balances) balanceByProgram[b.program_id] = b.total_points ?? 0;
 

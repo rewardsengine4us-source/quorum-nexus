@@ -2,21 +2,42 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { supabase } from "@/lib/supabaseClient";
 
-// This app has no real authentication (dummy Enter gate, per product decision).
-// This client-only guard just checks a local flag set when the user clicked
-// "Enter" on the landing page, and bounces back there if it's missing.
+// Gates every app page behind a real Supabase session. Named
+// RequireEntered rather than renamed to avoid touching the ~10 pages
+// that import it under this name for what is otherwise a drop-in swap.
 export default function RequireEntered({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    const entered = typeof window !== "undefined" && localStorage.getItem("qn_entered") === "true";
-    if (!entered) {
-      router.replace("/");
-    } else {
-      setReady(true);
-    }
+    let active = true;
+
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!active) return;
+      if (!session) {
+        router.replace("/");
+      } else {
+        setReady(true);
+      }
+    });
+
+    // Covers the case where the session expires or the user signs out in
+    // another tab while this page is open — bounce back to the sign-in
+    // form instead of continuing to render pages against a dead session.
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!session) {
+        router.replace("/");
+      }
+    });
+
+    return () => {
+      active = false;
+      subscription.unsubscribe();
+    };
   }, [router]);
 
   if (!ready) {

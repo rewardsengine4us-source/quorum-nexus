@@ -1,9 +1,15 @@
 import { NextResponse } from "next/server";
 import { runSync } from "@/lib/gmailSync";
+import { getSessionUserId } from "@/lib/supabaseServer";
 
 export async function POST() {
+  const userId = await getSessionUserId();
+  if (!userId) {
+    return NextResponse.json({ error: "Not signed in." }, { status: 401 });
+  }
+
   try {
-    const result = await runSync();
+    const result = await runSync(userId);
     return NextResponse.json(result);
   } catch (err: any) {
     console.error("Email sync error:", err);

@@ -4,7 +4,7 @@
 // radius is one file. Callers get back structured sync results, never the
 // credential itself.
 
-import { select, selectOne, insert, patch, del, DEMO_USER_ID } from "@/lib/db";
+import { select, selectOne, insert, patch, del } from "@/lib/db";
 import { seal, open, encryptionAvailable, type Sealed } from "@/lib/crypto";
 
 /** The only things we are permitted to read from a loyalty account. */
@@ -40,7 +40,7 @@ export function vaultReady(): boolean {
 }
 
 /** Never returns secrets — only metadata safe to render. */
-export async function listEntries(userId = DEMO_USER_ID): Promise<VaultEntry[]> {
+export async function listEntries(userId: string): Promise<VaultEntry[]> {
   const rows = await select(
     "loyalty_credentials",
     `user_id=eq.${userId}&select=id,program_id,scope,sync_enabled,sync_frequency,` +
@@ -69,12 +69,12 @@ export async function listEntries(userId = DEMO_USER_ID): Promise<VaultEntry[]> 
 }
 
 export async function storeCredential(opts: {
-  userId?: string;
+  userId: string;
   programId: number;
   username: string;
   secret: string;
 }): Promise<{ id: number }> {
-  const userId = opts.userId ?? DEMO_USER_ID;
+  const userId = opts.userId;
 
   if (!vaultReady()) {
     throw new Error(
@@ -116,7 +116,7 @@ export async function storeCredential(opts: {
 
 export async function removeCredential(
   credentialId: number,
-  userId = DEMO_USER_ID
+  userId: string
 ): Promise<void> {
   await del("loyalty_credentials", `id=eq.${credentialId}&user_id=eq.${userId}`);
 }
@@ -124,7 +124,7 @@ export async function removeCredential(
 export async function setSyncEnabled(
   credentialId: number,
   enabled: boolean,
-  userId = DEMO_USER_ID
+  userId: string
 ): Promise<void> {
   await patch("loyalty_credentials", `id=eq.${credentialId}&user_id=eq.${userId}`, {
     sync_enabled: enabled,

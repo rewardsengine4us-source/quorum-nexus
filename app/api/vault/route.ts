@@ -9,11 +9,17 @@ import {
   ALLOWED_SCOPE,
   CONSENT_VERSION,
 } from "@/lib/vault";
+import { getSessionUserId } from "@/lib/supabaseServer";
 
 export async function GET() {
+  const userId = await getSessionUserId();
+  if (!userId) {
+    return NextResponse.json({ error: "Not signed in." }, { status: 401 });
+  }
+
   try {
     const [entries, adapters] = await Promise.all([
-      listEntries(),
+      listEntries(userId),
       select("loyalty_sync_adapters", "select=*&order=display_name.asc"),
     ]);
 
@@ -30,11 +36,16 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
+  const userId = await getSessionUserId();
+  if (!userId) {
+    return NextResponse.json({ error: "Not signed in." }, { status: 401 });
+  }
+
   try {
     const body = await req.json();
 
     if (body.action === "toggle") {
-      await setSyncEnabled(Number(body.credentialId), !!body.enabled);
+      await setSyncEnabled(Number(body.credentialId), !!body.enabled, userId);
       return NextResponse.json({ ok: true });
     }
 
@@ -64,6 +75,7 @@ export async function POST(req: NextRequest) {
       }
 
       const { id } = await storeCredential({
+        userId,
         programId,
         username: String(body.username ?? ""),
         secret: String(body.secret ?? ""),
@@ -79,12 +91,17 @@ export async function POST(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
+  const userId = await getSessionUserId();
+  if (!userId) {
+    return NextResponse.json({ error: "Not signed in." }, { status: 401 });
+  }
+
   try {
     const id = Number(req.nextUrl.searchParams.get("id"));
     if (!id) {
       return NextResponse.json({ error: "id is required." }, { status: 400 });
     }
-    await removeCredential(id);
+    await removeCredential(id, userId);
     return NextResponse.json({ ok: true });
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 });

@@ -15,7 +15,6 @@ const BASE_URL =
   (process.env.NEXT_PUBLIC_SUPABASE_URL || "") + "/rest/v1/";
 const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
 
-export const DEMO_USER_ID = "demo-user-001";
 export const SERVICE_KEY_PRESENT = !!SERVICE_ROLE_KEY;
 
 function headers(extra?: Record<string, string>) {
@@ -56,7 +55,7 @@ async function request(
   return json;
 }
 
-/** SELECT — query string is everything after "?" (e.g. "user_id=eq.demo-user-001&select=*") */
+/** SELECT — query string is everything after "?" (e.g. "user_id=eq.<uuid>&select=*") */
 export async function select(table: string, query: string): Promise<any[]> {
   const rows = await request("GET", `${table}?${query}`);
   return Array.isArray(rows) ? rows : [];

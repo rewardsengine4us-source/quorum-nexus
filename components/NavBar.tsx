@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import ThemeToggle from "@/components/ThemeToggle";
+import { supabase } from "@/lib/supabaseClient";
 
 const links = [
   { href: "/dashboard", label: "Dashboard" },
@@ -23,8 +24,8 @@ export default function NavBar() {
   const router = useRouter();
   const [menuOpen, setMenuOpen] = useState(false);
 
-  function exit() {
-    localStorage.removeItem("qn_entered");
+  async function exit() {
+    await supabase.auth.signOut();
     router.push("/");
   }
 
