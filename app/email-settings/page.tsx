@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import RequireEntered from "@/components/RequireEntered";
 import NavBar from "@/components/NavBar";
@@ -52,6 +52,28 @@ function EmailSettingsBody() {
   const [success, setSuccess] = useState<string | null>(null);
 
   const errorMsg = searchParams?.get("error");
+  const [expandedProgram, setExpandedProgram] = useState<number | "unknown" | null>(null);
+
+  // The API returns one row per successfully parsed email (needed server-side
+  // to keep re-syncs idempotent), which is a raw activity log, not what a
+  // user wants to see — the same program can appear a dozen times as its
+  // balance updates month over month. Collapse to the single latest reading
+  // per program for display; older readings are still available per-program
+  // via the expander rather than deleted from view.
+  const latestByProgram = useMemo(() => {
+    // logs are already ordered id.desc from the API, so the first row seen
+    // per program is the most recent.
+    const latest = new Map<number | "unknown", EmailParsingLog>();
+    const history = new Map<number | "unknown", EmailParsingLog[]>();
+    for (const log of logs) {
+      const key = log.program_id ?? "unknown";
+      if (!latest.has(key)) latest.set(key, log);
+      const list = history.get(key) ?? [];
+      list.push(log);
+      history.set(key, list);
+    }
+    return { latest: [...latest.entries()], history };
+  }, [logs]);
 
   useEffect(() => {
     if (errorMsg) {
@@ -189,7 +211,8 @@ function EmailSettingsBody() {
           <h2 className="text-lg font-medium text-slate-100">Points Found</h2>
           {scannedTotal != null && (
             <span className="text-xs text-slate-500">
-              {logs.length} balance{logs.length === 1 ? "" : "s"} extracted from{" "}
+              {latestByProgram.latest.length} program
+              {latestByProgram.latest.length === 1 ? "" : "s"} from{" "}
               {scannedTotal.toLocaleString()} emails scanned
             </span>
           )}
@@ -204,39 +227,58 @@ function EmailSettingsBody() {
               <thead className="bg-base-800 text-slate-400">
                 <tr>
                   <th className="px-4 py-2 font-medium">Program</th>
-                  <th className="px-4 py-2 font-medium">Subject</th>
                   <th className="px-4 py-2 text-right font-medium">Balance</th>
-                  <th className="px-4 py-2 font-medium">Source</th>
-                  <th className="px-4 py-2 font-medium">Detected via</th>
+                  <th className="px-4 py-2 font-medium">Last updated</th>
+                  <th className="px-4 py-2"></th>
                 </tr>
               </thead>
               <tbody>
-                {logs.map((log) => (
-                  <tr key={log.id} className="border-t border-base-700/60">
-                    <td className="px-4 py-2 text-slate-200">
-                      {log.program_id ? programs[log.program_id] ?? "—" : "—"}
-                    </td>
-                    <td
-                      className="max-w-xs truncate px-4 py-2 text-xs text-slate-400"
-                      title={log.email_subject || ""}
-                    >
-                      {log.email_subject || "—"}
-                    </td>
-                    <td className="px-4 py-2 text-right font-mono text-slate-100">
-                      {log.extracted_balance != null
-                        ? log.extracted_balance.toLocaleString()
-                        : "—"}
-                    </td>
-                    <td className="px-4 py-2">
-                      <span className="pill border border-base-600 bg-base-700 text-xs text-slate-300">
-                        {log.source === "pdf" ? "PDF statement" : "email body"}
-                      </span>
-                    </td>
-                    <td className="px-4 py-2 font-mono text-xs text-slate-500">
-                      {log.detected_via || "—"}
-                    </td>
-                  </tr>
-                ))}
+                {latestByProgram.latest.map(([key, log]) => {
+                  const history = latestByProgram.history.get(key) ?? [];
+                  const isExpanded = expandedProgram === key;
+                  return (
+                    <Fragment key={key}>
+                      <tr className="border-t border-base-700/60">
+                        <td className="px-4 py-2 text-slate-200">
+                          {log.program_id ? programs[log.program_id] ?? "—" : "Unrecognized program"}
+                        </td>
+                        <td className="px-4 py-2 text-right font-mono text-slate-100">
+                          {log.extracted_balance != null
+                            ? log.extracted_balance.toLocaleString()
+                            : "—"}
+                        </td>
+                        <td className="px-4 py-2 text-xs text-slate-500">
+                          {new Date(log.created_at).toLocaleDateString()}
+                        </td>
+                        <td className="px-4 py-2 text-right">
+                          {history.length > 1 && (
+                            <button
+                              onClick={() => setExpandedProgram(isExpanded ? null : key)}
+                              className="text-xs text-slate-500 hover:text-slate-300"
+                            >
+                              {isExpanded ? "Hide" : `${history.length - 1} earlier`}
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                      {isExpanded &&
+                        history.slice(1).map((h) => (
+                          <tr key={`hist-${h.id}`} className="border-t border-base-700/30 bg-base-900/40">
+                            <td className="px-4 py-2 pl-8 text-xs text-slate-500">
+                              {h.email_subject || "—"}
+                            </td>
+                            <td className="px-4 py-2 text-right font-mono text-xs text-slate-500">
+                              {h.extracted_balance != null ? h.extracted_balance.toLocaleString() : "—"}
+                            </td>
+                            <td className="px-4 py-2 text-xs text-slate-600">
+                              {new Date(h.created_at).toLocaleDateString()}
+                            </td>
+                            <td className="px-4 py-2"></td>
+                          </tr>
+                        ))}
+                    </Fragment>
+                  );
+                })}
               </tbody>
             </table>
           </div>

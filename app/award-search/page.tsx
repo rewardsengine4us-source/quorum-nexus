@@ -280,23 +280,30 @@ function AwardSearchBody() {
                             : "—"}
                         </td>
                         <td className="px-4 py-2">
-                          {canBook ? (
-                            <span className="pill border border-emerald-900 bg-emerald-950 text-xs text-emerald-300">
-                              enough points
-                            </span>
-                          ) : chartRow.shortfall != null ? (
-                            <span className="pill border border-amber-900 bg-amber-950 text-xs text-amber-300">
-                              {chartRow.shortfall.toLocaleString()} short
-                            </span>
-                          ) : chartRow.isDynamic ? (
-                            <span className="pill border border-base-600 bg-base-700 text-xs text-slate-400">
-                              dynamic pricing
-                            </span>
-                          ) : (
-                            <span className="pill border border-base-600 bg-base-700 text-xs text-slate-400">
-                              published chart
-                            </span>
-                          )}
+                          <div className="flex flex-wrap gap-1.5">
+                            {canBook ? (
+                              <span className="pill border border-emerald-900 bg-emerald-950 text-xs text-emerald-300">
+                                enough points
+                              </span>
+                            ) : chartRow.shortfall != null ? (
+                              <span className="pill border border-amber-900 bg-amber-950 text-xs text-amber-300">
+                                {chartRow.shortfall.toLocaleString()} short
+                              </span>
+                            ) : chartRow.isDynamic ? (
+                              <span className="pill border border-base-600 bg-base-700 text-xs text-slate-400">
+                                dynamic pricing
+                              </span>
+                            ) : (
+                              <span className="pill border border-base-600 bg-base-700 text-xs text-slate-400">
+                                published chart
+                              </span>
+                            )}
+                            {chartRow.confidence === "estimated" && (
+                              <span className="pill border border-amber-900 bg-amber-950 text-xs text-amber-300">
+                                estimated — unverified
+                              </span>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     );

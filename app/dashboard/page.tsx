@@ -19,6 +19,23 @@ import type {
 } from "@/lib/types";
 import Link from "next/link";
 
+// Not exported — a named export from a page.tsx fails the Next.js App
+// Router build (only the default export + a known config allowlist are
+// permitted). Kept local to this file rather than lib/ since it's a
+// one-off UI concern, not shared logic.
+//
+// Raw Supabase/GoTrue errors ("JWT issued at future", "Invalid API key",
+// etc.) are not something a user can act on and shouldn't be shown
+// verbatim — they point at an env var or clock-skew problem on our end,
+// not anything wrong with the user's account.
+function friendlyDashboardError(rawMessage?: string): string {
+  const msg = (rawMessage || "").toLowerCase();
+  if (msg.includes("jwt") || msg.includes("api key") || msg.includes("invalid token")) {
+    return "Couldn't load your dashboard right now — this looks like a configuration issue on our end, not something wrong with your account. Try reloading in a minute.";
+  }
+  return rawMessage || "Failed to load dashboard";
+}
+
 export default function DashboardPage() {
   return (
     <RequireEntered>
@@ -53,7 +70,7 @@ function DashboardBody() {
         setBanks(bk);
         setPrograms(lp);
       } catch (e: any) {
-        setError(e.message ?? "Failed to load dashboard");
+        setError(friendlyDashboardError(e?.message));
       } finally {
         setLoading(false);
       }

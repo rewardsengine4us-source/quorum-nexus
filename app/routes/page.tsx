@@ -314,7 +314,7 @@ function RoutesBody() {
                           <span className="font-medium text-slate-100">{program?.program_name}</span>
                           <span className="ml-1.5 text-xs text-slate-500">({program?.category})</span>
                         </div>
-                        <Metric label="Ratio" value={formatRatio(route.transfer_ratio)} />
+                        <Metric label="Spend : Get" value={formatRatio(route.transfer_ratio)} />
                         <Metric
                           label="Bonus"
                           value={route.bonus_percent ? `+${route.bonus_percent}%` : "—"}
