@@ -12,24 +12,22 @@ import type {
   DevaluationAlert,
 } from "./types";
 
+// Public demo user ID for shared demo data access
+const PUBLIC_DEMO_USER_ID = "public-demo-user";
+
 // ---------- Session ----------
 
 /**
- * The signed-in user's id, or throws.
+ * Get current user's ID from browser, or fall back to public demo user.
+ * All public mode users share the same demo data.
  *
- * RLS policies on every user-owned table now key on auth.uid(), so reads
- * are automatically scoped without an explicit .eq("user_id", ...) — the
- * database enforces it, not application code. Writes still need the id
- * explicitly in the row payload (RLS's WITH CHECK compares against
- * whatever is submitted, it can't fill it in for you), so every insert
- * below fetches it here rather than trusting a caller-supplied value.
+ * This is client-side only — API routes should use getUserIdOrPublic from publicSession.ts
  */
 async function requireUserId(): Promise<string> {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) throw new Error("Not signed in.");
-  return user.id;
+  return user?.id ?? PUBLIC_DEMO_USER_ID;
 }
 
 // ---------- Banks & Credit Cards (catalog) ----------

@@ -1,12 +1,9 @@
 import { NextResponse } from "next/server";
 import { runSync } from "@/lib/gmailSync";
-import { getSessionUserId } from "@/lib/supabaseServer";
+import { getUserIdOrPublic } from "@/lib/publicSession";
 
 export async function POST() {
-  const userId = await getSessionUserId();
-  if (!userId) {
-    return NextResponse.json({ error: "Not signed in." }, { status: 401 });
-  }
+  const userId = await getUserIdOrPublic();
 
   try {
     const result = await runSync(userId);

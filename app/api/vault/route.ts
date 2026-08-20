@@ -9,13 +9,10 @@ import {
   ALLOWED_SCOPE,
   CONSENT_VERSION,
 } from "@/lib/vault";
-import { getSessionUserId } from "@/lib/supabaseServer";
+import { getUserIdOrPublic } from "@/lib/publicSession";
 
 export async function GET() {
-  const userId = await getSessionUserId();
-  if (!userId) {
-    return NextResponse.json({ error: "Not signed in." }, { status: 401 });
-  }
+  const userId = await getUserIdOrPublic();
 
   try {
     const [entries, adapters] = await Promise.all([
@@ -36,10 +33,7 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
-  const userId = await getSessionUserId();
-  if (!userId) {
-    return NextResponse.json({ error: "Not signed in." }, { status: 401 });
-  }
+  const userId = await getUserIdOrPublic();
 
   try {
     const body = await req.json();
@@ -91,10 +85,7 @@ export async function POST(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
-  const userId = await getSessionUserId();
-  if (!userId) {
-    return NextResponse.json({ error: "Not signed in." }, { status: 401 });
-  }
+  const userId = await getUserIdOrPublic();
 
   try {
     const id = Number(req.nextUrl.searchParams.get("id"));

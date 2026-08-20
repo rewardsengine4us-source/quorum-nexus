@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useEffect, useMemo, useState } from "react";
+import { Fragment, Suspense, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import RequireEntered from "@/components/RequireEntered";
 import NavBar from "@/components/NavBar";
@@ -35,7 +35,9 @@ export default function EmailSettingsPage() {
   return (
     <RequireEntered>
       <NavBar />
-      <EmailSettingsBody />
+      <Suspense fallback={null}>
+        <EmailSettingsBody />
+      </Suspense>
     </RequireEntered>
   );
 }

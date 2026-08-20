@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { select } from "@/lib/db";
-import { getSessionUserId } from "@/lib/supabaseServer";
+import { getUserIdOrPublic } from "@/lib/publicSession";
 import { parseUpiQr, resolveMcc } from "@/lib/upi";
 import { portalBoostsFor } from "@/lib/rewards";
 
@@ -47,13 +47,7 @@ export async function POST(req: NextRequest) {
 
       let allowedIds: Set<number> | null = null;
       if (scope === "mine") {
-        const userId = await getSessionUserId();
-        if (!userId) {
-          return NextResponse.json(
-            { error: "Sign in to scan against your own linked cards." },
-            { status: 401 }
-          );
-        }
+        const userId = await getUserIdOrPublic();
         const linked = await select(
           "user_cards",
           `user_id=eq.${userId}&select=credit_card_id`
