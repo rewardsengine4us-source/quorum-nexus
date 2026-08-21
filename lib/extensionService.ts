@@ -2,7 +2,7 @@
  * High-level data access layer for extension pairing & loyalty sync
  */
 
-import { select, selectOne, insert, update } from "@/lib/db";
+import { select, selectOne, insert, patch, upsert } from "@/lib/db";
 
 export async function getPairingCodesForUser(userId: string) {
   return select(
@@ -67,27 +67,26 @@ export async function recordSync(
     created_at: new Date().toISOString(),
   });
 
-  // Upsert user_points
-  const { data, error } = await (
-    await import("@/lib/supabaseClient")
-  ).supabase
-    .from("user_points")
-    .upsert(
-      {
-        user_id: userId,
-        program_id: programId,
-        total_points: balance,
-        last_updated: new Date().toISOString(),
-        source: "extension",
-        last_source_host: pageHost || null,
-      },
-      { onConflict: "user_id,program_id" }
-    )
-    .select()
-    .single();
+  // Upsert user_points (service-role write, bypasses RLS by design --
+  // the caller's identity was already established via the bearer token)
+  const lastUpdated = new Date().toISOString();
+  await upsert(
+    "user_points",
+    {
+      user_id: userId,
+      program_id: programId,
+      total_points: balance,
+      last_updated: lastUpdated,
+      source: "extension",
+      last_source_host: pageHost || null,
+    },
+    "user_id,program_id"
+  );
 
-  if (error) throw error;
-  return data;
+  return {
+    total_points: balance,
+    last_updated: lastUpdated,
+  };
 }
 
 export async function updateTokenLastUsed(
@@ -95,7 +94,7 @@ export async function updateTokenLastUsed(
   lastIp: string | null,
   lastUserAgent: string | null
 ) {
-  return update("extension_tokens", tokenId, {
+  return patch("extension_tokens", `id=eq.${tokenId}`, {
     last_used_at: new Date().toISOString(),
     last_ip: lastIp,
     last_user_agent: lastUserAgent,
@@ -103,7 +102,7 @@ export async function updateTokenLastUsed(
 }
 
 export async function revokeToken(tokenId: string) {
-  return update("extension_tokens", tokenId, {
+  return patch("extension_tokens", `id=eq.${tokenId}`, {
     revoked_at: new Date().toISOString(),
   });
 }

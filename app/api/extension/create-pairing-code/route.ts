@@ -10,7 +10,6 @@ import { json } from "@/lib/extensionCors";
 import { insert, select } from "@/lib/db";
 
 const createLimiter = new RateLimiter(3600000, 8); // 8 per hour per user
-const expireLimiter = new RateLimiter(3600000, 3); // max 3 unexpired at once
 
 export async function POST(req: NextRequest) {
   try {

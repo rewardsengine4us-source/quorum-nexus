@@ -1,8 +1,8 @@
 import { NextRequest } from "next/server";
-import { createSupabaseServerClient } from "@/lib/supabaseServer";
 import { requireExtensionUser, requireWebsiteUser } from "@/lib/extensionAuth";
 import { json } from "@/lib/extensionCors";
 import { revokeToken } from "@/lib/extensionService";
+import { selectOne } from "@/lib/db";
 
 export async function POST(req: NextRequest) {
   try {
@@ -24,14 +24,11 @@ export async function POST(req: NextRequest) {
         return json(400, { error: "Missing token_id" });
       }
 
-      // Verify ownership
-      const supabase = createSupabaseServerClient(req);
-      const { data } = await supabase
-        .from("extension_tokens")
-        .select("id")
-        .eq("id", token_id)
-        .eq("user_id", userId)
-        .single();
+      // Verify ownership (service-role lookup, since token belongs to userId)
+      const data = await selectOne(
+        "extension_tokens",
+        `id=eq.${token_id}&user_id=eq.${userId}&select=id`
+      );
 
       if (!data) {
         return json(404, { error: "Token not found" });

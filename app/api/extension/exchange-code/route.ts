@@ -7,7 +7,7 @@ import {
   RateLimiter,
 } from "@/lib/extensionAuth";
 import { json } from "@/lib/extensionCors";
-import { select, insert, update } from "@/lib/db";
+import { select, insert, patch } from "@/lib/db";
 
 const exchangeLimiter = new RateLimiter(900000, 20); // 20 failures per 15 min per IP
 
@@ -57,7 +57,7 @@ export async function POST(req: NextRequest) {
     });
 
     // Mark code as used
-    await update("extension_pairing_codes", codeRecord.id, {
+    await patch("extension_pairing_codes", `id=eq.${codeRecord.id}`, {
       used_at: new Date().toISOString(),
     });
 

@@ -1,6 +1,7 @@
 import { createHash, randomBytes } from "crypto";
 import { NextRequest } from "next/server";
-import { createSupabaseServerClient } from "./supabaseServer";
+import { getSessionUserId } from "./supabaseServer";
+import { select } from "./db";
 
 /**
  * SHA-256 hex digest of a string
@@ -61,21 +62,18 @@ export function getClientIp(req: NextRequest): string | null {
  * Returns userId if valid session, throws if not authenticated or demo user
  */
 export async function requireWebsiteUser(req: NextRequest): Promise<string> {
-  const supabase = createSupabaseServerClient(req);
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const userId = await getSessionUserId();
 
-  if (!user?.id) {
+  if (!userId) {
     throw new Error("Not authenticated");
   }
 
   // Demo user cannot create pairing codes
-  if (user.id === "public-demo-user") {
+  if (userId === "public-demo-user") {
     throw new Error("Demo user cannot create pairing codes");
   }
 
-  return user.id;
+  return userId;
 }
 
 /**
@@ -93,7 +91,6 @@ export async function requireExtensionUser(
   }
 
   const tokenHash = sha256Hex(token);
-  const { select } = await import("@/lib/db");
 
   const tokens = await select(
     "extension_tokens",
