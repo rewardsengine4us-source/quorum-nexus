@@ -37,6 +37,10 @@ export async function POST(req: NextRequest) {
       tokenId = token_id;
     }
 
+    if (!tokenId) {
+      return json(400, { error: "No token to revoke" });
+    }
+
     await revokeToken(tokenId);
 
     return json(200, { ok: true, revoked: true });
