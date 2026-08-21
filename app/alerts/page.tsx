@@ -133,6 +133,7 @@ function AlertCard({
   program?: LoyaltyProgram;
 }) {
   const severity = (alert.severity ?? "low").toLowerCase();
+  const entity = program ?? bank;
   const entityName = program?.program_name ?? bank?.bank_name ?? null;
 
   return (

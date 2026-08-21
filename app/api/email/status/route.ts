@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { select, selectOne, SERVICE_KEY_PRESENT } from "@/lib/db";
-import { getSessionUserId } from "@/lib/supabaseServer";
+import { getUserIdOrPublic } from "@/lib/publicSession";
 
 /** Total rows scanned, via PostgREST's exact-count header. */
 async function countScanned(userId: string): Promise<number | null> {
@@ -33,10 +33,7 @@ async function countScanned(userId: string): Promise<number | null> {
 // empty arrays — this is what originally revealed the RLS-grant and
 // supabase-js-vs-raw-fetch bugs. Keep it; it's cheap and it's saved hours.
 export async function GET() {
-  const userId = await getSessionUserId();
-  if (!userId) {
-    return NextResponse.json({ error: "Not signed in." }, { status: 401 });
-  }
+  const userId = await getUserIdOrPublic();
 
   let connection = null;
   let logs: any[] = [];
