@@ -58,3 +58,76 @@ function poll(attempt = 0) {
 }
 
 poll();
+
+// ---------- Loyalty balance sync (pairing / capture / disconnect) ----------
+
+const qnStatusEl = document.getElementById("qnStatus");
+const qnPairForm = document.getElementById("qnPairForm");
+const qnConnectedActions = document.getElementById("qnConnectedActions");
+const qnCodeInput = document.getElementById("qnCodeInput");
+const qnPairBtn = document.getElementById("qnPairBtn");
+const qnCaptureBtn = document.getElementById("qnCaptureBtn");
+const qnDisconnectBtn = document.getElementById("qnDisconnectBtn");
+const qnMsg = document.getElementById("qnMsg");
+
+function qnShowMsg(text, kind) {
+  qnMsg.textContent = text || "";
+  qnMsg.className = "qn-msg" + (kind ? " " + kind : "");
+}
+
+function qnRenderConnected(connected) {
+  qnStatusEl.textContent = connected ? "connected" : "not connected";
+  qnStatusEl.className = "qn-status" + (connected ? " connected" : "");
+  qnPairForm.style.display = connected ? "none" : "block";
+  qnConnectedActions.style.display = connected ? "block" : "none";
+}
+
+function qnRefreshStatus() {
+  chrome.runtime.sendMessage({ type: "QN_STATUS" }, (res) => {
+    qnRenderConnected(!!res?.connected);
+  });
+}
+
+qnPairBtn.addEventListener("click", () => {
+  const code = qnCodeInput.value.trim().toUpperCase();
+  if (!code) {
+    qnShowMsg("Enter the pairing code from the website.", "error");
+    return;
+  }
+  qnPairBtn.disabled = true;
+  qnShowMsg("Pairing…");
+  chrome.runtime.sendMessage({ type: "QN_PAIR", code }, (res) => {
+    qnPairBtn.disabled = false;
+    if (res?.ok) {
+      qnCodeInput.value = "";
+      qnShowMsg("Paired.", "ok");
+      qnRenderConnected(true);
+    } else {
+      qnShowMsg(res?.error || "Pairing failed.", "error");
+    }
+  });
+});
+
+qnCaptureBtn.addEventListener("click", () => {
+  qnCaptureBtn.disabled = true;
+  qnShowMsg("Reading this page…");
+  chrome.runtime.sendMessage({ type: "QN_CAPTURE_NOW" }, (res) => {
+    qnCaptureBtn.disabled = false;
+    if (res?.ok) {
+      qnShowMsg(`Synced ${res.program_code}: ${res.balance.toLocaleString()}`, "ok");
+    } else {
+      qnShowMsg(res?.error || "Couldn't read a balance on this page.", "error");
+    }
+  });
+});
+
+qnDisconnectBtn.addEventListener("click", () => {
+  qnDisconnectBtn.disabled = true;
+  chrome.runtime.sendMessage({ type: "QN_DISCONNECT" }, () => {
+    qnDisconnectBtn.disabled = false;
+    qnShowMsg("Disconnected.", "");
+    qnRenderConnected(false);
+  });
+});
+
+qnRefreshStatus();

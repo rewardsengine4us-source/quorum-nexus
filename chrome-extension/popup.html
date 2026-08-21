@@ -71,6 +71,69 @@
       text-align: center;
     }
     .footer a { color: #64748b; }
+
+    .qn-section {
+      margin-top: 14px;
+      padding-top: 12px;
+      border-top: 1px solid #1e293b;
+    }
+    .qn-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    .qn-status {
+      font-size: 11px;
+      color: #64748b;
+    }
+    .qn-status.connected { color: #4ade80; }
+    .qn-input {
+      width: 100%;
+      margin-top: 8px;
+      padding: 8px 10px;
+      background: #111827;
+      border: 1px solid #1e293b;
+      border-radius: 6px;
+      color: #f1f5f9;
+      font-family: ui-monospace, monospace;
+      font-size: 13px;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+    .qn-btn {
+      margin-top: 8px;
+      width: 100%;
+      padding: 8px 10px;
+      background: #22c55e;
+      border: none;
+      border-radius: 6px;
+      color: #052e1f;
+      font-weight: 600;
+      font-size: 12px;
+      cursor: pointer;
+    }
+    .qn-btn:disabled { opacity: 0.5; cursor: default; }
+    .qn-btn.secondary {
+      background: transparent;
+      border: 1px solid #1e293b;
+      color: #94a3b8;
+      font-weight: 500;
+    }
+    .qn-msg {
+      margin-top: 6px;
+      font-size: 11px;
+      color: #94a3b8;
+      min-height: 14px;
+    }
+    .qn-msg.error { color: #f87171; }
+    .qn-msg.ok { color: #4ade80; }
+    .qn-programs {
+      margin-top: 10px;
+      font-size: 10px;
+      color: #475569;
+      line-height: 1.5;
+    }
   </style>
 </head>
 <body>
@@ -78,6 +141,32 @@
   <div id="merchant" class="merchant"></div>
   <div id="content" class="state">Reading this page…</div>
   <div class="footer">Ranked against the full card catalog — not just your wallet. <a href="https://quorum-nexus.vercel.app/scan" target="_blank">Link your cards →</a></div>
+
+  <div class="qn-section">
+    <div class="qn-row">
+      <span>Loyalty balance sync</span>
+      <span id="qnStatus" class="qn-status">checking…</span>
+    </div>
+
+    <div id="qnPairForm">
+      <input id="qnCodeInput" class="qn-input" placeholder="XXXXX-XXXXX" maxlength="11" />
+      <button id="qnPairBtn" class="qn-btn">Pair device</button>
+    </div>
+
+    <div id="qnConnectedActions" style="display:none">
+      <button id="qnCaptureBtn" class="qn-btn">Capture balance on this page</button>
+      <button id="qnDisconnectBtn" class="qn-btn secondary">Disconnect</button>
+    </div>
+
+    <div id="qnMsg" class="qn-msg"></div>
+
+    <div class="qn-programs">
+      v1: Aeroplan, Avios, Accor, Marriott Bonvoy, MakeMyTrip, Air India.
+      More added after testing.
+      <a href="https://quorum-nexus.vercel.app/dashboard/extension" target="_blank">Get a pairing code →</a>
+    </div>
+  </div>
+
   <script src="popup.js"></script>
 </body>
 </html>
