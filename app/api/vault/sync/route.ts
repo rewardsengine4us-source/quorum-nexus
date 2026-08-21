@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { runSyncFor, dueForSync } from "@/lib/vault";
 import { safeEqual } from "@/lib/crypto";
-import { getSessionUserId } from "@/lib/supabaseServer";
+import { getUserIdOrPublic } from "@/lib/publicSession";
 import { selectOne } from "@/lib/db";
 
 export const maxDuration = 60;
@@ -12,16 +12,16 @@ export const maxDuration = 60;
  * runSyncFor() itself doesn't take a user id — it trusts whatever
  * credentialId it's given and resolves the owning row internally. That's
  * correct for the cron path below (system-triggered, iterates every due
- * credential regardless of owner), but wrong for a request coming from a
- * signed-in browser: without an ownership check here, any logged-in user
- * could trigger a sync against another user's credentialId just by
- * guessing a small integer.
+ * credential regardless of owner), but wrong for a request coming from the
+ * browser: without an ownership check here, one visitor could trigger a
+ * sync against another visitor's credentialId just by guessing a small
+ * integer. getUserIdOrPublic() (rather than a real-session-only lookup)
+ * keeps this check working for the shared public-demo-user too — the
+ * ownership check below still enforces that a credential can only be
+ * synced by whichever id it was actually created under.
  */
 export async function POST(req: NextRequest) {
-  const userId = await getSessionUserId();
-  if (!userId) {
-    return NextResponse.json({ error: "Not signed in." }, { status: 401 });
-  }
+  const userId = await getUserIdOrPublic();
 
   try {
     const { credentialId } = await req.json();
