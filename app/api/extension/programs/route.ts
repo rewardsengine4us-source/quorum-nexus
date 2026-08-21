@@ -11,7 +11,7 @@ export async function GET(req: NextRequest) {
         id: p.id,
         program_code: p.program_code,
         program_name: p.program_name,
-        partner_type: p.partner_type,
+        program_type: p.program_type,
       })),
     });
   } catch (err: any) {

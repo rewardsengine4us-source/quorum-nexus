@@ -31,7 +31,7 @@ export async function getSyncLogsForUser(userId: string, limit = 50) {
 export async function getPrograms() {
   return select(
     "loyalty_programs",
-    `is_active=eq.true&select=id,program_code,program_name,partner_type` +
+    `is_active=eq.true&select=id,program_code,program_name,program_type` +
       `&order=program_name`
   );
 }

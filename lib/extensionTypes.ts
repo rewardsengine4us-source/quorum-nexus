@@ -54,10 +54,10 @@ export interface ListTokensResponse {
 }
 
 export interface ProgramInfo {
-  id: string;
+  id: number;
   program_code: string;
   program_name: string;
-  partner_type?: string;
+  program_type?: string;
 }
 
 export interface ListProgramsResponse {
