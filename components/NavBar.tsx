@@ -17,6 +17,7 @@ const links = [
   { href: "/redeem", label: "Redeem" },
   { href: "/alerts", label: "Alerts" },
   { href: "/email-settings", label: "Email" },
+  { href: "/dashboard/extension", label: "Extension" },
 ];
 
 export default function NavBar() {
