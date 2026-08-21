@@ -1,15 +1,12 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 
 // useSearchParams() opts a page out of static prerendering unless it's
 // wrapped in Suspense — without this, `next build` fails prerendering the
 // route with "useSearchParams() should be wrapped in a suspense boundary".
-// Splitting the param-reading bit into its own component keeps the
-// fallback trivial — the real "Loading…" state below is driven by
-// session-checking, not by this.
 export default function LoginPage() {
   return (
     <Suspense fallback={null}>
@@ -19,7 +16,6 @@ export default function LoginPage() {
 }
 
 function LoginPageInner() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const [email, setEmail] = useState("");
   const [sending, setSending] = useState(false);
@@ -27,22 +23,14 @@ function LoginPageInner() {
   const [error, setError] = useState<string | null>(
     searchParams?.get("error") ?? null
   );
-  const [checkingSession, setCheckingSession] = useState(true);
 
-  // Already signed in (e.g. back button after login) — skip straight past
-  // the form instead of asking for an email again.
-  useEffect(() => {
-    (async () => {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      if (session) {
-        router.replace("/dashboard");
-      } else {
-        setCheckingSession(false);
-      }
-    })();
-  }, [router]);
+  // Note: this page intentionally does NOT auto-redirect to /dashboard on
+  // an existing session. The site is fully public — /dashboard is already
+  // reachable without signing in — so /login's only job is to always be
+  // available as the one place a visitor can trade a shared/anonymous view
+  // for a real account. Bouncing away from it on any truthy session
+  // (including a stale one left over from earlier testing) made it
+  // impossible to sign in again without first finding a sign-out control.
 
   async function sendMagicLink(e: React.FormEvent) {
     e.preventDefault();
@@ -62,14 +50,6 @@ function LoginPageInner() {
     } finally {
       setSending(false);
     }
-  }
-
-  if (checkingSession) {
-    return (
-      <main className="flex min-h-screen items-center justify-center text-slate-500">
-        Loading Quorum Nexus…
-      </main>
-    );
   }
 
   return (
