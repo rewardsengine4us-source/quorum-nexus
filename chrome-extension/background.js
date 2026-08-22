@@ -32,17 +32,29 @@ async function qnClearToken() {
 // same balance reported twice within 10s is skipped.
 const lastSyncAt = new Map(); // program_code -> timestamp
 
-async function qnSyncPoints(candidate) {
+/**
+ * Returns { ok, error } rather than swallowing failures.
+ *
+ * The previous version caught everything and returned nothing, so a sync
+ * that 401'd looked exactly like one that succeeded — and "Capture balance"
+ * could report success while writing nothing. Automatic captures still stay
+ * quiet (a mid-browse toast is not useful), but the manual button now tells
+ * the truth about what happened.
+ */
+async function qnSyncPoints(candidate, { force = false } = {}) {
   const token = await qnGetToken();
-  if (!token) return; // not paired yet, nothing to do
+  if (!token) return { ok: false, error: "Not paired with the website yet." };
 
+  // Debounce per program so a chatty SPA re-render doesn't spam the API.
+  // The manual button bypasses it: the user explicitly asked, and being
+  // told "nothing happened" because of an invisible timer is baffling.
   const now = Date.now();
   const last = lastSyncAt.get(candidate.program_code) || 0;
-  if (now - last < 10000) return;
+  if (!force && now - last < 10000) return { ok: true, skipped: "debounced" };
   lastSyncAt.set(candidate.program_code, now);
 
   try {
-    await fetch(`${API_BASE}/api/extension/sync-points`, {
+    const res = await fetch(`${API_BASE}/api/extension/sync-points`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -50,71 +62,91 @@ async function qnSyncPoints(candidate) {
       },
       body: JSON.stringify(candidate),
     });
-  } catch {
-    // Silent by design: a failed sync isn't user-actionable mid-browse.
-    // The popup's "Capture balance" button gives an explicit retry path.
+    if (res.status === 401) {
+      await qnClearToken();
+      return { ok: false, error: "This device was unpaired. Pair again." };
+    }
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      return { ok: false, error: data.error || `Sync failed (HTTP ${res.status})` };
+    }
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: `Could not reach the server: ${e.message}` };
   }
 }
 
-chrome.runtime.onMessage.addListener((msg) => {
-  if (msg?.type !== "QN_LOYALTY_CANDIDATE") return;
-  qnSyncPoints({
-    program_code: msg.program_code,
-    balance: msg.balance,
-    page_host: msg.page_host,
-    captured_at: msg.captured_at,
-  });
-});
+// ---------- One message router ----------
+//
+// Every handler lives here, in a single listener, on purpose.
+//
+// Chrome runs EVERY registered onMessage listener for EVERY message. When
+// handlers were split across six listeners, clicking "Pair" ran all six:
+// the five that didn't care hit their `if (type !== ...) return;` guard and
+// returned undefined, which tells Chrome "no async reply coming". That was
+// enough to tear the response channel down before the one genuinely async
+// handler — waiting on fetch — could call sendResponse. The popup's callback
+// fired with undefined, the token was never stored, and pairing had never
+// once succeeded. Zero rows in extension_tokens, ever.
+//
+// A single listener with a single `return true` cannot have that problem:
+// there is no second listener to close the channel early.
 
-// ---------- Pairing ----------
+const QN_HANDLERS = {
+  // Fire-and-forget: a content script reporting a balance it spotted.
+  QN_LOYALTY_CANDIDATE: async (msg) => {
+    await qnSyncPoints({
+      program_code: msg.program_code,
+      balance: msg.balance,
+      page_host: msg.page_host,
+      captured_at: msg.captured_at,
+    });
+    return { ok: true };
+  },
 
-chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
-  if (msg?.type !== "QN_PAIR") return;
-  (async () => {
+  QN_PAIR: async (msg) => {
+    const code = String(msg.code || "").trim().toUpperCase();
+    if (!code) return { ok: false, error: "Enter the pairing code from the website." };
     try {
       const res = await fetch(`${API_BASE}/api/extension/exchange-code`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ code: msg.code, label: "Chrome Extension" }),
+        body: JSON.stringify({ code, label: "Chrome Extension" }),
       });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.token) {
-        sendResponse({ ok: false, error: data.error || "Pairing failed" });
-        return;
+        return { ok: false, error: data.error || `Pairing failed (HTTP ${res.status})` };
       }
       await qnSetToken(data.token);
-      sendResponse({ ok: true });
+      return { ok: true };
     } catch (e) {
-      sendResponse({ ok: false, error: "Network error" });
+      // Surface the real reason rather than a blanket "Network error" —
+      // that phrasing sent us hunting a connectivity problem that did not
+      // exist while the actual fault was in this file.
+      return { ok: false, error: `Could not reach the server: ${e.message}` };
     }
-  })();
-  return true;
-});
+  },
 
-chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
-  if (msg?.type !== "QN_STATUS") return;
-  (async () => {
+  QN_STATUS: async () => {
     const token = await qnGetToken();
-    if (!token) {
-      sendResponse({ connected: false });
-      return;
-    }
+    if (!token) return { connected: false };
     try {
       const res = await fetch(`${API_BASE}/api/extension/me`, {
         headers: { Authorization: `Bearer ${token}` },
       });
+      if (res.status === 401) {
+        // Token was revoked server-side; stop claiming we are connected.
+        await qnClearToken();
+        return { connected: false };
+      }
       const data = await res.json();
-      sendResponse({ connected: !!data.connected, last_used_at: data.last_used_at });
+      return { connected: !!data.connected, last_used_at: data.last_used_at };
     } catch {
-      sendResponse({ connected: true }); // token exists; API just unreachable
+      return { connected: true }; // token exists; API just unreachable
     }
-  })();
-  return true;
-});
+  },
 
-chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
-  if (msg?.type !== "QN_DISCONNECT") return;
-  (async () => {
+  QN_DISCONNECT: async () => {
     const token = await qnGetToken();
     if (token) {
       try {
@@ -131,26 +163,22 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
       }
     }
     await qnClearToken();
-    sendResponse({ ok: true });
-  })();
-  return true;
-});
+    return { ok: true };
+  },
 
-// Manual "Capture balance" button in the popup: re-run the extractor on
-// the active tab right now instead of waiting for the next DOM mutation.
-chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
-  if (msg?.type !== "QN_CAPTURE_NOW") return;
-  chrome.tabs.query({ active: true, currentWindow: true }, async (tabs) => {
+  // Manual "Capture balance": re-run the extractor on the active tab now
+  // rather than waiting for the next DOM mutation.
+  QN_CAPTURE_NOW: async () => {
+    const token = await qnGetToken();
+    if (!token) return { ok: false, error: "Pair with the website first." };
+
+    const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
     const tab = tabs[0];
-    if (!tab?.id) {
-      sendResponse({ ok: false, error: "No active tab" });
-      return;
-    }
+    if (!tab?.id) return { ok: false, error: "No active tab" };
+
     try {
-      // Inject the shared lookup + extractor, then run them. Works even if
-      // this page wasn't already matched by the declarative content_scripts
-      // block (e.g. a program not yet in programs.js's host list, or the
-      // user wants to try capturing from an unrelated page).
+      // Inject the shared lookup + extractor, then run them. Works even on a
+      // page the declarative content_scripts block didn't match.
       await chrome.scripting.executeScript({
         target: { tabId: tab.id },
         files: ["programs.js", "extractor.js"],
@@ -159,28 +187,65 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
         target: { tabId: tab.id },
         func: () => {
           const code = self.qnResolveProgram(location.hostname);
+          if (!code) return { __noProgram: true, host: location.hostname };
           return self.qnExtractBalance(code);
         },
       });
-      if (!candidate) {
-        sendResponse({ ok: false, error: "No balance found on this page" });
-        return;
+
+      if (candidate?.__noProgram) {
+        return {
+          ok: false,
+          error: `${candidate.host} isn't a recognised loyalty program yet.`,
+        };
       }
-      await qnSyncPoints({
+      if (!candidate) {
+        return {
+          ok: false,
+          error: "Couldn't find a balance on this page. Open your account or points page and try again.",
+        };
+      }
+
+      const synced = await qnSyncPoints({
         ...candidate,
         page_host: tab.url ? new URL(tab.url).hostname.replace(/^www\./, "") : "",
         captured_at: new Date().toISOString(),
-      });
-      sendResponse({ ok: true, ...candidate });
+      }, { force: true });
+      if (!synced.ok) return { ok: false, error: synced.error };
+      return { ok: true, ...candidate };
     } catch (e) {
-      sendResponse({ ok: false, error: "Could not read this page" });
+      return { ok: false, error: `Could not read this page: ${e.message}` };
     }
-  });
-  return true;
+  },
+
+  QN_GET_ACTIVE_INFO: async () => {
+    const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+    const tab = tabs[0];
+    return tab ? tabInfo.get(tab.id) ?? null : null;
+  },
+};
+
+chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+  // Badge upkeep is genuinely fire-and-forget and needs the sender's tab, so
+  // it stays outside the router's request/response shape.
+  if (msg?.type === "QN_PAGE_INFO") {
+    qnHandlePageInfo(msg, sender);
+    return false;
+  }
+
+  const handler = QN_HANDLERS[msg?.type];
+  if (!handler) return false;
+
+  handler(msg, sender)
+    .then((result) => sendResponse(result))
+    .catch((e) => sendResponse({ ok: false, error: e?.message || "Unexpected error" }));
+
+  return true; // one listener, one open channel
 });
 
-chrome.runtime.onMessage.addListener((msg, sender) => {
-  if (msg?.type !== "QN_PAGE_INFO" || !sender.tab?.id) return;
+// ---------- Badge ----------
+
+function qnHandlePageInfo(msg, sender) {
+  if (!sender.tab?.id) return;
   const tabId = sender.tab.id;
   const existing = tabInfo.get(tabId);
 
@@ -209,7 +274,7 @@ chrome.runtime.onMessage.addListener((msg, sender) => {
     .catch(() => {
       chrome.action.setBadgeText({ tabId, text: "" });
     });
-});
+}
 
 chrome.tabs.onRemoved.addListener((tabId) => tabInfo.delete(tabId));
 chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
@@ -219,12 +284,3 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
   }
 });
 
-// Popup asks for whatever we currently know about the active tab.
-chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
-  if (msg?.type !== "QN_GET_ACTIVE_INFO") return;
-  chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-    const tab = tabs[0];
-    sendResponse(tab ? tabInfo.get(tab.id) ?? null : null);
-  });
-  return true; // keep the message channel open for the async sendResponse
-});
