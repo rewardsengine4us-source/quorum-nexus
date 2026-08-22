@@ -54,6 +54,10 @@ function LiveSyncBody() {
   const [otp, setOtp] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [secondsLeft, setSecondsLeft] = useState<number | null>(null);
+  // The worker owns `status`, and it only flips to "resuming" on its next
+  // poll — up to two seconds after we hand over the code. Without this the
+  // OTP box would sit there looking unsubmitted and invite a double entry.
+  const [submitted, setSubmitted] = useState(false);
 
   const otpRef = useRef<HTMLInputElement | null>(null);
 
@@ -98,10 +102,43 @@ function LiveSyncBody() {
     if (session?.status === "awaiting_otp") otpRef.current?.focus();
   }, [session?.status]);
 
+  // The browser work happens in a background worker, not in the request
+  // that started it, so progress arrives by polling rather than by the
+  // response to /start. Stops as soon as the session reaches a terminal
+  // state so an idle tab isn't hitting the API forever.
+  useEffect(() => {
+    const id = session?.id;
+    const live =
+      session?.status === "starting" ||
+      session?.status === "awaiting_otp" ||
+      session?.status === "resuming";
+    if (!id || !live) return;
+
+    let cancelled = false;
+    const t = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/live-sync/session?id=${id}`, {
+          cache: "no-store",
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!cancelled && data.session) setSession(data.session);
+      } catch {
+        // A dropped poll is not worth surfacing; the next one will do.
+      }
+    }, 2000);
+
+    return () => {
+      cancelled = true;
+      clearInterval(t);
+    };
+  }, [session?.id, session?.status]);
+
   async function start() {
     setBusy(true);
     setError(null);
     setOtp("");
+    setSubmitted(false);
     setSession(null);
     try {
       const res = await fetch("/api/live-sync/start", {
@@ -131,6 +168,7 @@ function LiveSyncBody() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to submit code");
+      setSubmitted(true);
       setSession(data.session);
     } catch (e: any) {
       setError(e.message ?? "Failed to submit code");
@@ -144,6 +182,7 @@ function LiveSyncBody() {
     await fetch(`/api/live-sync/session?id=${session.id}`, { method: "DELETE" });
     setSession(null);
     setOtp("");
+    setSubmitted(false);
   }
 
   /* ---------------------------------------------------------------- */
@@ -173,8 +212,12 @@ function LiveSyncBody() {
     );
   }
 
-  const active = session?.status === "awaiting_otp";
+  const active = session?.status === "awaiting_otp" && !submitted;
   const done = session?.status === "success";
+  const working =
+    session?.status === "starting" ||
+    session?.status === "resuming" ||
+    (session?.status === "awaiting_otp" && submitted);
 
   return (
     <main className="mx-auto max-w-lg px-4 py-8 sm:px-6">
@@ -245,6 +288,25 @@ function LiveSyncBody() {
         </div>
       )}
 
+      {/* -------- in flight -------- */}
+      {working && (
+        <div className="card-surface mt-6 rounded-xl p-5 text-center">
+          <div className="mx-auto h-6 w-6 animate-spin rounded-full border-2 border-base-700 border-t-accent-500" />
+          <p className="mt-3 text-sm text-slate-300">
+            {session?.stepMessage ?? "Working…"}
+          </p>
+          <p className="mt-1 text-xs text-slate-600">
+            Keep this page open — your code is on the way.
+          </p>
+          <button
+            onClick={cancel}
+            className="mt-4 rounded-lg border border-base-700 px-4 py-2 text-xs text-slate-400"
+          >
+            Cancel
+          </button>
+        </div>
+      )}
+
       {/* -------- step 2: relay the code -------- */}
       {active && (
         <div className="card-surface mt-6 rounded-xl p-5">
@@ -312,6 +374,7 @@ function LiveSyncBody() {
             onClick={() => {
               setSession(null);
               setOtp("");
+              setSubmitted(false);
             }}
             className="mt-4 rounded-lg border border-emerald-800 px-4 py-2 text-xs text-emerald-300"
           >
@@ -332,6 +395,7 @@ function LiveSyncBody() {
               onClick={() => {
                 setSession(null);
                 setOtp("");
+                setSubmitted(false);
                 setError(null);
               }}
               className="mt-4 rounded-lg border border-red-800 px-4 py-2 text-xs text-red-300"

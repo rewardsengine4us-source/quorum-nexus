@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSessionUserId } from "@/lib/supabaseServer";
 import { selectOne } from "@/lib/db";
-import { browserlessConfigured } from "@/lib/browserless";
+import { liveSyncConfigured } from "@/lib/liveSync";
 import { LIVE_SYNC_PROGRAMS } from "@/lib/liveSyncPrograms";
 
 export const dynamic = "force-dynamic";
@@ -22,7 +22,7 @@ export async function GET() {
 
   return NextResponse.json({
     signedIn: !!userId,
-    configured: browserlessConfigured(),
+    configured: liveSyncConfigured(),
     phone,
     programs: LIVE_SYNC_PROGRAMS.map((p) => ({
       code: p.code,

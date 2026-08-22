@@ -1,12 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSessionUserId } from "@/lib/supabaseServer";
-import { selectOne } from "@/lib/db";
-import { browserlessConfigured } from "@/lib/browserless";
-import { startSync } from "@/lib/liveSync";
+import { startSync, liveSyncConfigured } from "@/lib/liveSync";
 
-// Opening a browser, loading an airline site and driving two form steps
-// comfortably exceeds the default 10s. 60s is the ceiling we can rely on.
-export const maxDuration = 60;
+// This route only hands the job to the Supabase worker and returns; the
+// browser work runs there for up to two minutes afterwards. 30s is ample
+// and keeps a wedged handoff from sitting on a connection.
+export const maxDuration = 30;
 export const dynamic = "force-dynamic";
 
 /**
@@ -24,7 +23,7 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  if (!browserlessConfigured()) {
+  if (!liveSyncConfigured()) {
     return NextResponse.json(
       {
         error:
@@ -44,22 +43,10 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // The phone number comes from the user's own profile rather than the
-    // request body, so a crafted request cannot drive a login against a
-    // number the account holder never registered.
-    const profile = await selectOne("users", `id=eq.${userId}&select=phone`);
-    const phone = profile?.phone;
-    if (!phone) {
-      return NextResponse.json(
-        {
-          error:
-            "Add your phone number on the Profile page first — that's the number the program will text.",
-        },
-        { status: 400 }
-      );
-    }
-
-    const session = await startSync({ userId, programCode, phone });
+    // No phone in the payload on purpose — startSync reads it from the
+    // user's own profile, so a crafted request cannot drive a login
+    // against a number this account never registered.
+    const session = await startSync({ userId, programCode });
     return NextResponse.json({ session });
   } catch (err: any) {
     return NextResponse.json(
