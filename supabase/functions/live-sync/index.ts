@@ -170,15 +170,30 @@ async function run(
     // The login form is often behind a "Sign in" control rather than on
     // the landing page itself, so try to open it before giving up on
     // finding a phone field.
+    //
+    // Note what is *not* here: DISMISS is not run again after the panel
+    // opens. Its overlay sweep and a login modal have identical geometry —
+    // full-screen, fixed, high z-index — so it was deleting the sign-in
+    // form a moment after we clicked to summon it.
     let phoneSel: string | null = await cdp.evaluate(FIND_PHONE);
     if (!phoneSel) {
       const opener = await cdp.evaluate(findAdvance(OPEN_LOGIN_PATTERN));
       if (opener) {
         await cdp.click(opener);
-        await sleep(3500);
-        await cdp.evaluate(FINDER);
-        await cdp.evaluate(DISMISS);
-        phoneSel = await cdp.evaluate(FIND_PHONE);
+
+        // Poll rather than sleep a fixed guess: these panels animate in,
+        // and some fetch their markup on first open. Too short a wait was
+        // indistinguishable from "this site has no phone login".
+        const until = Date.now() + 12000;
+        while (Date.now() < until && !phoneSel) {
+          await sleep(700);
+          try {
+            await cdp.evaluate(FINDER);
+            phoneSel = await cdp.evaluate(FIND_PHONE);
+          } catch {
+            // Panel may swap the document out from under us; try again.
+          }
+        }
       }
     }
 
@@ -353,7 +368,7 @@ async function run(
       otp_submitted: null,
       error_message:
         (e.message ?? "Unknown error").slice(0, 600) +
-        (e.seen ? ` (saw: ${JSON.stringify(e.seen).slice(0, 400)})` : ""),
+        (e.seen ? ` (saw: ${JSON.stringify(e.seen).slice(0, 900)})` : ""),
     }).catch(() => {});
 
     try {

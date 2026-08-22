@@ -113,6 +113,11 @@ export const DISMISS = `
     var r = el.getBoundingClientRect();
     if (r.width > innerWidth * 0.8 && r.height > innerHeight * 0.5 &&
         Number(s.zIndex || 0) > 10) {
+      // Never rip out something the user is meant to type into. A consent
+      // banner is all prose and buttons; a login panel is a full-screen
+      // fixed overlay with exactly the same geometry, and deleting it was
+      // removing the sign-in form moments after we clicked to open it.
+      if (el.querySelector("input, textarea, select, form")) continue;
       el.remove(); n++;
     }
   }
@@ -303,8 +308,9 @@ export const DESCRIBE_PAGE = `
       };
     }),
     buttons: qn.clickables().map(function (el) {
-      return (qn.textOf(el) || el.getAttribute("aria-label") || "").slice(0, 30);
-    }).filter(Boolean).slice(0, 30)
+      return (qn.textOf(el) || el.getAttribute("aria-label") || "").slice(0, 24);
+    }).filter(Boolean).slice(0, 24),
+    url: location.href
   };
 })()
 `;
