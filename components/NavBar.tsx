@@ -13,6 +13,7 @@ const links = [
   { href: "/scan", label: "Scan" },
   { href: "/award-search", label: "Award Search" },
   { href: "/loyalty-sync", label: "Sync" },
+  { href: "/live-sync", label: "Live Sync" },
   { href: "/wishlist", label: "Wishlist" },
   { href: "/redeem", label: "Redeem" },
   { href: "/alerts", label: "Alerts" },
