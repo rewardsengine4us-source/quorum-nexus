@@ -19,5 +19,10 @@
     }
   },
   "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
-  "exclude": ["node_modules"]
+  // supabase/ holds Deno source, not Next source. It uses Deno's own
+  // conventions -- explicit .ts import specifiers, the Deno and EdgeRuntime
+  // globals -- which are correct there and errors under this config. It is
+  // deployed by the Supabase CLI, never bundled by Next, so type-checking
+  // it here only produces false failures.
+  "exclude": ["node_modules", "supabase"]
 }
