@@ -42,11 +42,19 @@ function qnFindBalance(root) {
     },
   });
 
-  let best = null; // { value, score }
+  // Collect visible text nodes once, in document order, so a number can be
+  // scored against words in *neighbouring* nodes as well as its own.
+  const nodes = [];
   let node;
   while ((node = walker.nextNode())) {
     const text = node.nodeValue.trim();
-    if (!QN_BALANCE_WORDS.test(text)) continue;
+    if (text) nodes.push({ text, el: node.parentElement });
+  }
+
+  let best = null; // { value, score }
+
+  for (let i = 0; i < nodes.length; i++) {
+    const { text, el } = nodes[i];
 
     const numMatch = text.match(QN_NUMBER);
     if (!numMatch) continue;
@@ -54,21 +62,76 @@ function qnFindBalance(root) {
     const value = qnParseNumber(numMatch[0]);
     if (value === null || value < 10 || value > 20000000) continue; // sanity bounds
 
-    // Score: prefer short, standalone text (likely a summary widget, not
-    // a paragraph mentioning miles in passing), and prefer the number
-    // being close to the balance word.
-    const wordIndex = text.search(QN_BALANCE_WORDS);
     const numIndex = numMatch.index ?? 0;
-    const distance = Math.abs(wordIndex - numIndex);
-    const lengthPenalty = Math.min(text.length, 200);
-    const score = 1000 - distance * 2 - lengthPenalty;
+    let score = null;
 
-    if (!best || score > best.score) {
+    if (QN_BALANCE_WORDS.test(text)) {
+      // Best case: the number and the word share a text node
+      // ("48,250 Points"), so their distance is directly measurable.
+      const distance = Math.abs(text.search(QN_BALANCE_WORDS) - numIndex);
+      score = 1000 - distance * 2 - Math.min(text.length, 200);
+    } else {
+      // Otherwise look for a balance word in the surrounding markup. Real
+      // dashboards nearly always split the label from the figure, because
+      // they are styled differently:
+      //
+      //   <div class="label">Points balance</div>
+      //   <div class="value">48,250</div>
+      //
+      // Requiring both in one text node meant the layout used by most
+      // account pages returned nothing at all. This was the single reason
+      // the extractor found no balance on a page that plainly showed one.
+      const context = qnNearbyText(nodes, i, el);
+      if (!QN_BALANCE_WORDS.test(context)) continue;
+
+      // Ranked below a same-node match: the association is inferred from
+      // proximity rather than read directly, so it deserves less trust
+      // when both kinds of candidate exist on one page.
+      score = 700 - Math.min(text.length, 200);
+
+      // A bare number in its own element is exactly what a value node
+      // looks like; a number buried in prose usually is not.
+      if (/^[\d.,\s]+$/.test(text)) score += 120;
+    }
+
+    if (best === null || score > best.score) {
       best = { value, score };
     }
   }
 
   return best ? best.value : null;
+}
+
+/**
+ * Text near a candidate number: its immediate siblings, plus the text of
+ * the nearest ancestor small enough to still be one widget rather than the
+ * whole page.
+ *
+ * The ancestor cap matters — without it, `body.innerText` would satisfy the
+ * balance-word test on virtually any loyalty site, and every stray number
+ * on the page would score as a balance.
+ */
+function qnNearbyText(nodes, index, el) {
+  let parts = [];
+
+  // Adjacent text nodes in document order: label immediately before the
+  // value is the overwhelmingly common shape, but handle either order.
+  for (let j = Math.max(0, index - 3); j <= Math.min(nodes.length - 1, index + 2); j++) {
+    if (j !== index) parts.push(nodes[j].text);
+  }
+
+  // Walk up a few levels for a container that reads like a single widget.
+  let up = el;
+  for (let depth = 0; depth < 4 && up; depth++) {
+    const t = (up.innerText || up.textContent || "").trim();
+    if (t && t.length <= 200) {
+      parts.push(t);
+      break;
+    }
+    up = up.parentElement;
+  }
+
+  return parts.join(" ");
 }
 
 // Public entry point: given a program_code (already resolved from the
