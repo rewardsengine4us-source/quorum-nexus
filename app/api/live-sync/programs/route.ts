@@ -28,6 +28,10 @@ export async function GET() {
       code: p.code,
       name: p.name,
       loginUrl: p.loginUrl,
+      // Surfaced so the picker can say which programs a server cannot
+      // reach, instead of letting someone pick one and wait for a failure
+      // we already know is coming.
+      blocked: p.reachability === "blocked_by_bot_protection",
     })),
   });
 }

@@ -28,6 +28,8 @@ export interface LiveSyncProgram {
    * portals want a bare 10-digit number and reject "+91...".
    */
   stripDialCode?: string;
+  /** Measured, not assumed — see Reachability. */
+  reachability?: Reachability;
   /** Extra CSS selectors tried *before* the generic heuristics. */
   hints?: {
     phone?: string[];
@@ -38,24 +40,41 @@ export interface LiveSyncProgram {
   };
 }
 
+/**
+ * Whether a program is reachable by server-side automation at all.
+ *
+ * This is not a guess. Air India and IndiGo both answer our requests with
+ * an Akamai "Access Denied" page (errors.edgesuite.net, with a reference
+ * number) — bot protection refusing a datacenter IP outright, not a
+ * selector problem we can code around. Airlines are the most-scraped sites
+ * on the internet and buy protection accordingly.
+ *
+ * Blocked programs stay listed rather than being deleted, because the
+ * honest answer to "why can't I sync Air India?" is "their edge blocks
+ * servers, use the browser extension" — and the extension genuinely does
+ * work there, since it runs from the member's own browser and IP.
+ */
+export type Reachability = "ok" | "blocked_by_bot_protection";
+
 export const LIVE_SYNC_PROGRAMS: LiveSyncProgram[] = [
   {
-    // Air India has no standalone login URL — /login.html is a 404. Sign-in
-    // is a panel opened from a header control, which the driver reaches via
-    // its "open the login form" click before looking for a phone field.
-    code: "ai_maharaja",
-    programId: 88,
-    name: "Air India Maharaja Club",
-    loginUrl: "https://www.airindia.com/in/en/maharaja-club.html",
-    balanceUrl: "https://www.airindia.com/in/en/maharaja-club/account-summary.html",
-    stripDialCode: "91",
+    // Accor's homepage is a booking search with no login form; auth lives
+    // on permalink.accor.com, which renders the form directly.
+    code: "accor_all",
+    programId: 117,
+    name: "ALL - Accor Live Limitless",
+    loginUrl:
+      "https://permalink.accor.com/account/login?client=ALLHEADER&languageCode=en",
+    balanceUrl: "https://permalink.accor.com/account/my-account?languageCode=en",
+    reachability: "ok",
   },
   {
-    code: "indigo_bluchip",
-    programId: 191,
-    name: "IndiGo BluChip",
-    loginUrl: "https://www.goindigo.in/bluchip.html",
-    stripDialCode: "91",
+    code: "marriott_bonvoy",
+    programId: 114,
+    name: "Marriott Bonvoy",
+    loginUrl: "https://www.marriott.com/sign-in.mi",
+    balanceUrl: "https://www.marriott.com/loyalty/myAccount/default.mi",
+    reachability: "ok",
   },
   {
     code: "makemytrip_tier",
@@ -63,24 +82,33 @@ export const LIVE_SYNC_PROGRAMS: LiveSyncProgram[] = [
     name: "MakeMyTrip SuperMember",
     loginUrl: "https://www.makemytrip.com/",
     stripDialCode: "91",
-  },
-  {
-    code: "accor_all",
-    programId: 117,
-    name: "ALL - Accor Live Limitless",
-    loginUrl: "https://all.accor.com/usa/index.en.shtml",
-  },
-  {
-    code: "marriott_bonvoy",
-    programId: 114,
-    name: "Marriott Bonvoy",
-    loginUrl: "https://www.marriott.com/loyalty/createAccount/createAccountPage1.mi",
+    reachability: "ok",
   },
   {
     code: "avios",
     programId: 93,
     name: "British Airways Avios",
     loginUrl: "https://www.britishairways.com/travel/loginr/execclub/_gf/en_gb",
+    reachability: "ok",
+  },
+  {
+    // Measured, not assumed: returns an Akamai Access Denied page.
+    code: "ai_maharaja",
+    programId: 88,
+    name: "Air India Maharaja Club",
+    loginUrl: "https://www.airindia.com/in/en/maharaja-club.html",
+    balanceUrl: "https://www.airindia.com/in/en/maharaja-club/account-summary.html",
+    stripDialCode: "91",
+    reachability: "blocked_by_bot_protection",
+  },
+  {
+    // Same Akamai block as Air India.
+    code: "indigo_bluchip",
+    programId: 191,
+    name: "IndiGo BluChip",
+    loginUrl: "https://www.goindigo.in/bluchip.html",
+    stripDialCode: "91",
+    reachability: "blocked_by_bot_protection",
   },
 ];
 

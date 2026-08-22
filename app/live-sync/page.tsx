@@ -12,6 +12,8 @@ interface ProgramOpt {
   code: string;
   name: string;
   loginUrl: string;
+  /** Their edge refuses server-side browsers; the extension still works. */
+  blocked: boolean;
 }
 
 interface Session {
@@ -70,7 +72,11 @@ function LiveSyncBody() {
         setConfigured(!!data.configured);
         setPhone(data.phone ?? null);
         setPrograms(data.programs || []);
-        if (data.programs?.length) setProgramCode(data.programs[0].code);
+        // Default to something that can actually work. Defaulting to the
+        // first entry once meant landing on a program we know is blocked.
+        const usable = (data.programs || []).filter((p: ProgramOpt) => !p.blocked);
+        if (usable.length) setProgramCode(usable[0].code);
+        else if (data.programs?.length) setProgramCode(data.programs[0].code);
       } catch (e: any) {
         setError(e.message ?? "Failed to load");
       } finally {
@@ -259,12 +265,25 @@ function LiveSyncBody() {
               className="w-full rounded-md border border-base-700 bg-base-900 px-3 py-3 text-sm text-slate-100 focus:border-accent-500 focus:outline-none"
             >
               {programs.map((p) => (
-                <option key={p.code} value={p.code}>
+                <option key={p.code} value={p.code} disabled={p.blocked}>
                   {p.name}
+                  {p.blocked ? " — use the extension" : ""}
                 </option>
               ))}
             </select>
           </label>
+
+          {programs.find((p) => p.code === programCode)?.blocked && (
+            <p className="mt-3 rounded-md border border-amber-900 bg-amber-950/30 p-3 text-xs leading-relaxed text-amber-300">
+              This program blocks automated browsers at their edge, so live
+              sync can&apos;t reach it from our server. The{" "}
+              <a href="/dashboard/extension" className="underline">
+                browser extension
+              </a>{" "}
+              handles it instead — it runs in your own browser, so the site
+              sees an ordinary visit.
+            </p>
+          )}
 
           {phone && (
             <p className="mt-3 text-xs text-slate-600">
@@ -277,7 +296,12 @@ function LiveSyncBody() {
 
           <button
             onClick={start}
-            disabled={busy || !phone || !configured}
+            disabled={
+              busy ||
+              !phone ||
+              !configured ||
+              !!programs.find((p) => p.code === programCode)?.blocked
+            }
             className="mt-5 w-full rounded-lg bg-accent-500 px-6 py-3.5 text-sm font-medium text-base-950 hover:bg-accent-400 disabled:opacity-40"
           >
             {busy ? "Opening browser…" : "Sync now"}

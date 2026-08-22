@@ -152,6 +152,12 @@ export const FIND_PHONE = `
     if (type === "password") score -= 100;
     if (type === "email") score -= 80;
     if (/search|promo|coupon|newsletter|voucher/.test(d)) score -= 60;
+    // A booking search box is the most prominent field on every hotel and
+    // airline homepage, and it out-scored nothing so it won by default.
+    // Accor's "Destination, hotel name" was the only input we found there.
+    if (/destination|hotel ?name|where.*going|city|check.?in|check.?out/.test(d)) {
+      score -= 120;
+    }
 
     var ml = Number(el.getAttribute("maxlength") || 0);
     // maxlength 10 is a very strong signal on Indian portals, which

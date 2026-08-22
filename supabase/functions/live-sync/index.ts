@@ -131,6 +131,8 @@ async function run(
   const startedAt = Date.now();
   const deadline = startedAt + TOTAL_BUDGET_MS;
   let cdp: Cdp | null = null;
+  // What we typed and what we pressed, carried into the error report.
+  let submitContext: unknown = null;
 
   const rows = await rest(
     `live_sync_sessions?id=eq.${sessionId}&select=*&limit=1`
@@ -166,6 +168,24 @@ async function run(
     await cdp.waitForReady(28_000);
     await cdp.evaluate(FINDER);
     await cdp.evaluate(DISMISS);
+
+    // Give the page a moment to finish hydrating before hunting for
+    // fields. Accor's dump showed a button still labelled "Loading..." at
+    // the instant we looked — the sign-in control existed but had not
+    // rendered yet, and we reported "no phone field" as though the site
+    // simply did not offer one.
+    {
+      const settled = Date.now() + 8000;
+      while (Date.now() < settled) {
+        const stillLoading = await cdp
+          .evaluate(
+            "/loading|please wait|initialis|initializ/i.test(document.body ? document.body.innerText.slice(0, 3000) : '')"
+          )
+          .catch(() => false);
+        if (!stillLoading) break;
+        await sleep(800);
+      }
+    }
 
     // The login form is often behind a "Sign in" control rather than on
     // the landing page itself, so try to open it before giving up on
@@ -213,9 +233,35 @@ async function run(
       throw new Error("Found the phone field but couldn't type into it.");
     }
 
+    // Record which field we chose and what the panel looked like *before*
+    // submitting. Once the portal answers, the form is gone and there is no
+    // way to tell "we typed into the right box and were refused" from "we
+    // typed the number into a search box" — which are opposite problems.
+    const filled = await cdp
+      .evaluate(
+        "(function(){var el=document.querySelector(" +
+          JSON.stringify(phoneSel) +
+          ");if(!el)return null;return {name:el.getAttribute('name'),id:el.id||null," +
+          "type:el.getAttribute('type'),placeholder:el.getAttribute('placeholder')," +
+          "maxlength:el.getAttribute('maxlength'),value:String(el.value||'')};})()"
+      )
+      .catch(() => null);
+
     const send = await cdp.evaluate(findAdvance(SEND_OTP_PATTERN));
+    const sendLabel = send
+      ? await cdp
+          .evaluate(
+            "(function(){var el=document.querySelector(" +
+              JSON.stringify(send) +
+              ");return el?(el.innerText||el.textContent||'').trim().slice(0,40):null;})()"
+          )
+          .catch(() => null)
+      : null;
+
+    submitContext = { filled, clicked: sendLabel };
+
     if (send) await cdp.click(send);
-    await sleep(5000);
+    await sleep(6000);
 
     // Some portals need a second "Continue" before the code screen.
     let atOtp: boolean = await cdp.evaluate(OTP_PRESENT).catch(() => false);
@@ -231,13 +277,35 @@ async function run(
     }
 
     const shot = await cdp.screenshot();
+
+    // Only claim a code is on its way when a code field is actually on
+    // screen. The previous version announced "Sent" regardless and parked
+    // for two minutes — so when the portal answered with an error page, it
+    // sat there telling the user to watch their phone for an SMS that was
+    // never triggered. A hopeful guess presented as fact is worse than a
+    // failure, because it costs the user the wait as well as the attempt.
+    if (!atOtp) {
+      const seen = await cdp.evaluate(DESCRIBE_PAGE).catch(() => null);
+      const pageText = await cdp
+        .evaluate(
+          "(document.body ? document.body.innerText : '').replace(/\\s+/g,' ').trim().slice(0, 400)"
+        )
+        .catch(() => "");
+
+      throw Object.assign(
+        new Error(
+          "Submitted your number, but the portal never asked for a code — " +
+            "so no SMS was sent. The page said: \"" + pageText + "\""
+        ),
+        { seen }
+      );
+    }
+
     await update(sessionId, {
       status: "awaiting_otp",
       screenshot: shot,
       otp_submitted: null,
-      step_message: atOtp
-        ? "Code sent. Enter it below."
-        : "Sent — if no code arrives, check the screenshot; the page may need a different step.",
+      step_message: "Code sent. Enter it below.",
       expires_at: new Date(deadline - FINISH_RESERVE_MS).toISOString(),
     });
 
@@ -368,7 +436,10 @@ async function run(
       otp_submitted: null,
       error_message:
         (e.message ?? "Unknown error").slice(0, 600) +
-        (e.seen ? ` (saw: ${JSON.stringify(e.seen).slice(0, 900)})` : ""),
+        (submitContext
+          ? ` (submitted: ${JSON.stringify(submitContext).slice(0, 300)})`
+          : "") +
+        (e.seen ? ` (saw: ${JSON.stringify(e.seen).slice(0, 700)})` : ""),
     }).catch(() => {});
 
     try {

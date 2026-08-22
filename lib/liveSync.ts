@@ -120,6 +120,19 @@ export async function startSync(opts: {
     throw new Error(`${opts.programCode} is not enabled for live sync yet.`);
   }
 
+  // Refuse up front rather than spending two minutes and a browser to
+  // rediscover a wall we have already measured. Air India and IndiGo
+  // answer with an Akamai "Access Denied"; no amount of retrying changes
+  // that, and repeated attempts only harden the block.
+  if (program.reachability === "blocked_by_bot_protection") {
+    throw new Error(
+      `${program.name} blocks automated browsers at their edge (Akamai), so ` +
+        `live sync cannot reach it from a server. Use the Quorum Nexus ` +
+        `browser extension for this one — it runs in your own browser, so ` +
+        `the site sees an ordinary visit and it works today.`
+    );
+  }
+
   // Read from the profile, not from the request, so a crafted call cannot
   // drive a login against a number this account never registered.
   const profile = await selectOne("users", `id=eq.${opts.userId}&select=phone`);
