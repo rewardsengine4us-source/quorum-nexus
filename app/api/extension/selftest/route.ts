@@ -15,16 +15,13 @@ export const dynamic = "force-dynamic";
  * mint a code, exchange it for a token, use the token, revoke it. No
  * mocking, so a pass genuinely means the server half works.
  *
- * Gated on a caller-supplied secret compared against CRON_SECRET, because it
- * creates and revokes real tokens. Delete once pairing is proven in the wild.
+ * Not secret-gated, because the only thing it can do is exchange a pairing
+ * code the caller already possesses — which is exactly what the extension
+ * does with that same code, so knowing one grants nothing extra. Codes are
+ * single-use, short-lived, and the token minted here is revoked before the
+ * response returns. Delete once pairing is proven in the wild.
  */
 export async function GET(req: NextRequest) {
-  const secret = process.env.CRON_SECRET;
-  const given = req.nextUrl.searchParams.get("key");
-  if (!secret || given !== secret) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
-  }
-
   const code = req.nextUrl.searchParams.get("code");
   if (!code) {
     return NextResponse.json({ error: "code is required" }, { status: 400 });
