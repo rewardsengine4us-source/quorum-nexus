@@ -61,35 +61,100 @@ export class Cdp {
     };
   }
 
-  static connect(opts: CdpOptions, connectTimeoutMs = 30000): Promise<Cdp> {
-    const host = opts.host ?? "production-sfo.browserless.io";
-    const url =
-      `wss://${host}?token=${encodeURIComponent(opts.token)}` +
-      `&timeout=${opts.sessionTimeoutMs ?? 180000}` +
-      `&stealth=true`;
+  /**
+   * Ask the service, over plain HTTP, why it is unhappy.
+   *
+   * A rejected WebSocket upgrade surfaces in Deno as an `error` event with
+   * no status and no body, so a failed connect is indistinguishable from a
+   * bad key, an unsupported query parameter, or a plan limit. This endpoint
+   * answers with a readable status and message, which is the difference
+   * between a fix and another guess.
+   */
+  private static async diagnose(
+    host: string,
+    token: string
+  ): Promise<string> {
+    try {
+      const res = await fetch(
+        `https://${host}/json/version?token=${encodeURIComponent(token)}`,
+        { method: "GET" }
+      );
+      const body = (await res.text()).slice(0, 300);
+      if (res.ok) {
+        // The token is fine and the service is up, so the upgrade itself
+        // was refused — almost always a query parameter this plan rejects.
+        return `the service is reachable and the key is valid (HTTP ${res.status}), so the connection options were refused. Response: ${body}`;
+      }
+      return `HTTP ${res.status} from the browser service: ${body}`;
+    } catch (e) {
+      return `the browser service could not be reached at all: ${(e as Error).message}`;
+    }
+  }
 
+  /** One attempt at one URL. */
+  private static attempt(url: string, timeoutMs: number): Promise<Cdp> {
     return new Promise((resolve, reject) => {
+      let settled = false;
       const ws = new WebSocket(url);
+
       const timer = setTimeout(() => {
+        if (settled) return;
+        settled = true;
         try {
           ws.close();
         } catch { /* already closing */ }
-        reject(new Error("Timed out connecting to the browser service."));
-      }, connectTimeoutMs);
+        reject(new Error("timed out"));
+      }, timeoutMs);
 
       ws.onopen = () => {
+        if (settled) return;
+        settled = true;
         clearTimeout(timer);
         resolve(new Cdp(ws));
       };
+
       ws.onerror = () => {
+        if (settled) return;
+        settled = true;
         clearTimeout(timer);
-        reject(
-          new Error(
-            "Could not reach the browser service. Check BROWSERLESS_API_KEY."
-          )
-        );
+        reject(new Error("upgrade refused"));
       };
     });
+  }
+
+  /**
+   * Connect, trying the fullest set of options first and falling back to
+   * the barest one.
+   *
+   * Browserless plan-gates query parameters, and a parameter this plan does
+   * not allow gets the entire upgrade refused rather than ignored — we
+   * already found `Browserless.reconnect` capped at 10s the same way. Since
+   * a failed upgrade tells Deno nothing, trying the plain `?token=` form
+   * before giving up costs one round trip and turns a hard failure into a
+   * working session on the plan's default limits.
+   */
+  static async connect(
+    opts: CdpOptions,
+    connectTimeoutMs = 25000
+  ): Promise<Cdp> {
+    const host = opts.host ?? "production-sfo.browserless.io";
+    const token = encodeURIComponent(opts.token);
+
+    const candidates = [
+      `wss://${host}?token=${token}&timeout=${opts.sessionTimeoutMs ?? 180000}`,
+      `wss://${host}?token=${token}`,
+    ];
+
+    for (const url of candidates) {
+      try {
+        return await Cdp.attempt(url, connectTimeoutMs);
+      } catch {
+        // Try the next, simpler form.
+      }
+    }
+
+    const why = await Cdp.diagnose(host, opts.token);
+    throw new Error(`Browser service refused the connection — ${why}`);
   }
 
   send(method: string, params: any = {}, useSession = true): Promise<any> {
