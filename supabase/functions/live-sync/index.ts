@@ -30,7 +30,42 @@ import {
 } from "./inpage.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
-const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+
+/**
+ * Auth deliberately does not compare against a service-key env var.
+ *
+ * The first version did, and it 401'd every call: the caller's key was
+ * demonstrably valid (it had just written the session row through
+ * PostgREST) but did not equal whatever Deno.env exposed here. Supabase has
+ * been renaming its key variables, so pinning auth to one variable name
+ * means the function breaks whenever that naming moves.
+ *
+ * Instead: verify_jwt is on, so the platform has already checked the
+ * signature before we run. All that is left is to confirm the caller is
+ * the service role rather than an anon visitor, which the token itself
+ * states. The same token is then used for our database calls, so there is
+ * exactly one credential in play and no second copy to fall out of sync.
+ */
+function bearerToken(req: Request): string | null {
+  const raw = req.headers.get("authorization") ?? "";
+  const m = raw.match(/^Bearer\s+(.+)$/i);
+  return m ? m[1].trim() : null;
+}
+
+function jwtRole(token: string): string | null {
+  try {
+    const payload = token.split(".")[1];
+    if (!payload) return null;
+    const b64 = payload.replace(/-/g, "+").replace(/_/g, "/");
+    const padded = b64 + "=".repeat((4 - (b64.length % 4)) % 4);
+    const json = new TextDecoder().decode(
+      Uint8Array.from(atob(padded), (c) => c.charCodeAt(0))
+    );
+    return JSON.parse(json).role ?? null;
+  } catch {
+    return null;
+  }
+}
 
 // Budget, measured from the moment the background task starts. Supabase
 // kills the worker at 150s regardless, so we stop early enough to still
@@ -42,31 +77,41 @@ const FINISH_RESERVE_MS = 22_000;
  * Persistence
  * ------------------------------------------------------------------ */
 
-async function rest(
-  path: string,
-  init: RequestInit = {}
-): Promise<any> {
-  const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
-    ...init,
-    headers: {
-      apikey: SERVICE_KEY,
-      Authorization: `Bearer ${SERVICE_KEY}`,
-      "Content-Type": "application/json",
-      ...(init.headers ?? {}),
-    },
-  });
-  const text = await res.text();
-  if (!res.ok) throw new Error(`db ${res.status}: ${text.slice(0, 200)}`);
-  return text ? JSON.parse(text) : null;
+/**
+ * Database access bound to one caller's token.
+ *
+ * Built per invocation rather than as module state because a Deno isolate
+ * can serve several requests at once, and a shared mutable key would let
+ * one request's credential leak into another's query.
+ */
+function makeDb(key: string) {
+  async function rest(path: string, init: RequestInit = {}): Promise<any> {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
+      ...init,
+      headers: {
+        apikey: key,
+        Authorization: `Bearer ${key}`,
+        "Content-Type": "application/json",
+        ...(init.headers ?? {}),
+      },
+    });
+    const text = await res.text();
+    if (!res.ok) throw new Error(`db ${res.status}: ${text.slice(0, 200)}`);
+    return text ? JSON.parse(text) : null;
+  }
+
+  function update(id: string, fields: Record<string, unknown>) {
+    return rest(`live_sync_sessions?id=eq.${id}`, {
+      method: "PATCH",
+      headers: { Prefer: "return=minimal" },
+      body: JSON.stringify({ ...fields, updated_at: new Date().toISOString() }),
+    });
+  }
+
+  return { rest, update };
 }
 
-function update(id: string, fields: Record<string, unknown>) {
-  return rest(`live_sync_sessions?id=eq.${id}`, {
-    method: "PATCH",
-    headers: { Prefer: "return=minimal" },
-    body: JSON.stringify({ ...fields, updated_at: new Date().toISOString() }),
-  });
-}
+type Db = ReturnType<typeof makeDb>;
 
 /* ------------------------------------------------------------------ *
  * The run
@@ -78,7 +123,11 @@ interface RunInput {
   host?: string;
 }
 
-async function run({ sessionId, token, host }: RunInput): Promise<void> {
+async function run(
+  { sessionId, token, host }: RunInput,
+  db: Db
+): Promise<void> {
+  const { rest, update } = db;
   const startedAt = Date.now();
   const deadline = startedAt + TOTAL_BUDGET_MS;
   let cdp: Cdp | null = null;
@@ -318,21 +367,33 @@ async function run({ sessionId, token, host }: RunInput): Promise<void> {
  * ------------------------------------------------------------------ */
 
 Deno.serve(async (req) => {
-  // Only our own server calls this, holding the service role key. There is
-  // no browser-facing path to it, so there is no CORS surface to open.
-  const auth = req.headers.get("authorization") ?? "";
-  if (!auth.includes(SERVICE_KEY)) {
-    return new Response(JSON.stringify({ error: "Unauthorized" }), {
-      status: 401,
-      headers: { "Content-Type": "application/json" },
-    });
+  // verify_jwt has already validated the signature; this only confirms the
+  // caller is the service role and not an anon visitor.
+  const key = bearerToken(req);
+  if (!key) {
+    return new Response(
+      JSON.stringify({ error: "Missing Authorization: Bearer <key>." }),
+      { status: 401, headers: { "Content-Type": "application/json" } }
+    );
+  }
+  const role = jwtRole(key);
+  if (role !== "service_role") {
+    return new Response(
+      JSON.stringify({
+        error: `This endpoint is for server-to-server calls only (token role: ${role ?? "unreadable"}).`,
+      }),
+      { status: 403, headers: { "Content-Type": "application/json" } }
+    );
   }
 
   let body: RunInput;
   try {
     body = await req.json();
   } catch {
-    return new Response(JSON.stringify({ error: "Bad JSON" }), { status: 400 });
+    return new Response(JSON.stringify({ error: "Bad JSON" }), {
+      status: 400,
+      headers: { "Content-Type": "application/json" },
+    });
   }
 
   if (!body.sessionId || !body.token) {
@@ -346,7 +407,7 @@ Deno.serve(async (req) => {
   // that would otherwise time out long before this finishes, and the UI
   // tracks progress by polling the session row rather than this response.
   // @ts-ignore EdgeRuntime is provided by the Supabase runtime.
-  EdgeRuntime.waitUntil(run(body));
+  EdgeRuntime.waitUntil(run(body, makeDb(key)));
 
   return new Response(JSON.stringify({ accepted: true }), {
     status: 202,
