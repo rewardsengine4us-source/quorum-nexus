@@ -163,14 +163,13 @@ const EMAIL_WORDS = /(e-?mail)/i;
  * hidden-but-rendered desktop variant) and the honest phone field is not
  * reliably the first in DOM order.
  */
-export async function fillPhone(
+export async function findPhoneField(
   page: Page,
-  digits: string,
   hints: string[] = []
-): Promise<boolean> {
+): Promise<string | null> {
   await installFinder(page);
 
-  const selector = await page.evaluate(
+  return page.evaluate(
     (hintList: string[], phoneSrc: string, emailSrc: string) => {
       const qn = (window as any).__qn;
       const PHONE = new RegExp(phoneSrc, "i");
@@ -208,7 +207,14 @@ export async function fillPhone(
     PHONE_WORDS.source,
     EMAIL_WORDS.source
   );
+}
 
+export async function fillPhone(
+  page: Page,
+  digits: string,
+  hints: string[] = []
+): Promise<boolean> {
+  const selector = await findPhoneField(page, hints);
   if (!selector) return false;
 
   await page.click(selector, { clickCount: 3 });
