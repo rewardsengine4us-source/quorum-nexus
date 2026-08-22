@@ -18,6 +18,7 @@ const links = [
   { href: "/alerts", label: "Alerts" },
   { href: "/email-settings", label: "Email" },
   { href: "/dashboard/extension", label: "Extension" },
+  { href: "/profile", label: "Profile" },
 ];
 
 export default function NavBar() {
