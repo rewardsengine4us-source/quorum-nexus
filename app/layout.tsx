@@ -1,9 +1,19 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
   title: "Quorum Nexus",
   description: "Credit card points transfer optimizer & redemption platform",
+};
+
+// Without this, mobile browsers render the page at desktop width (~980px)
+// and zoom out to fit — every page looks tiny and unusable on a phone
+// regardless of any responsive Tailwind classes already in place.
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 5,
+  themeColor: "#0b0f16",
 };
 
 /**
