@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import {
   openBrowser,
   reopenBrowser,
-  parkBrowser,
+  rawReconnect,
   closeBrowser,
   browserlessConfigured,
 } from "@/lib/browserless";
@@ -65,7 +65,19 @@ export async function GET(req: NextRequest) {
     );
   }
 
-  const steps: Record<string, any> = { program: program.name };
+  // Candidate override, so a wrong login URL can be corrected by testing
+  // rather than by guessing and redeploying each time. https only — this
+  // reports a page title and whether a field was found, nothing more.
+  const override = req.nextUrl.searchParams.get("url");
+  if (override && !override.startsWith("https://")) {
+    return NextResponse.json(
+      { ok: false, error: "url must be https." },
+      { status: 400 }
+    );
+  }
+  const target = override || program.loginUrl;
+
+  const steps: Record<string, any> = { program: program.name, target };
   let browser = null;
 
   try {
@@ -78,7 +90,7 @@ export async function GET(req: NextRequest) {
     page.setDefaultTimeout(30000);
 
     const t1 = Date.now();
-    await page.goto(program.loginUrl, {
+    await page.goto(target, {
       waitUntil: "domcontentloaded",
       timeout: 45000,
     });
@@ -92,19 +104,45 @@ export async function GET(req: NextRequest) {
     steps.phoneFieldFound = !!phoneSel;
     steps.phoneSelector = phoneSel;
 
+    // What the page offers, so a missing phone field can be diagnosed
+    // as "wrong page" versus "login is behind a button".
+    steps.page = await page.evaluate(() => {
+      const qn = (window as any).__qn;
+      return {
+        inputs: qn
+          .inputs()
+          .slice(0, 12)
+          .map((el: HTMLElement) => ({
+            type: el.getAttribute("type"),
+            name: el.getAttribute("name"),
+            id: el.id || null,
+            placeholder: el.getAttribute("placeholder"),
+            maxlength: el.getAttribute("maxlength"),
+          })),
+        buttons: qn
+          .clickables()
+          .map((el: HTMLElement) => qn.textOf(el).slice(0, 30))
+          .filter(Boolean)
+          .slice(0, 25),
+      };
+    });
+
     // The critical one: can this browser survive between requests?
-    try {
-      const ws = await parkBrowser(page, 30_000);
-      steps.reconnectSupported = true;
-      // Prove the endpoint is genuinely usable, not just returned.
-      const again = await reopenBrowser(ws);
-      const pages = await again.pages();
-      steps.reattached = pages.length > 0;
-      await closeBrowser(again);
-      browser = null;
-    } catch (err: any) {
-      steps.reconnectSupported = false;
-      steps.reconnectError = err.message;
+    const raw = await rawReconnect(page, 30_000);
+    steps.reconnectRaw = raw;
+    steps.reconnectSupported = !!raw?.browserWSEndpoint;
+
+    if (raw?.browserWSEndpoint) {
+      // Prove the endpoint is genuinely usable, not merely returned.
+      try {
+        const again = await reopenBrowser(raw.browserWSEndpoint);
+        steps.reattached = (await again.pages()).length > 0;
+        await closeBrowser(again);
+        browser = null;
+      } catch (err: any) {
+        steps.reattached = false;
+        steps.reattachError = err.message;
+      }
     }
 
     await closeBrowser(browser);

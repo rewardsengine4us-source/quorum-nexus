@@ -75,25 +75,39 @@ export async function parkBrowser(
   page: Page,
   timeoutMs = 5 * 60 * 1000
 ): Promise<string> {
+  const raw = await rawReconnect(page, timeoutMs);
+  const endpoint = raw?.browserWSEndpoint;
+  if (!endpoint || typeof endpoint !== "string") {
+    throw new Error(
+      `Could not park the browser session for OTP entry. ` +
+        `Browserless replied: ${JSON.stringify(raw).slice(0, 300)}`
+    );
+  }
+  return endpoint;
+}
+
+/**
+ * The unwrapped `Browserless.reconnect` reply.
+ *
+ * Exposed separately because the command answers with `{ error,
+ * browserWSEndpoint }` rather than throwing, so swallowing the payload
+ * turns "your plan doesn't include this" into an indistinguishable
+ * "something went wrong". The probe endpoint reports it verbatim.
+ */
+export async function rawReconnect(
+  page: Page,
+  timeoutMs: number
+): Promise<any> {
   const cdp = await page.createCDPSession();
   try {
-    const res: any = await cdp.send(
+    return await cdp.send(
       // Not in puppeteer's typed CDP protocol — this is a Browserless
       // extension command, hence the cast.
       "Browserless.reconnect" as any,
       { timeout: timeoutMs } as any
     );
-    const endpoint = res?.browserWSEndpoint;
-    if (!endpoint || typeof endpoint !== "string") {
-      throw new Error("Browserless.reconnect returned no browserWSEndpoint.");
-    }
-    return endpoint;
   } catch (err: any) {
-    throw new Error(
-      `Could not park the browser session for OTP entry: ${err.message}. ` +
-        `This usually means the Browserless plan or endpoint does not support ` +
-        `reconnects.`
-    );
+    return { error: err?.message ?? String(err), threw: true };
   } finally {
     // Detaching the CDP session is fine; the browser itself stays up until
     // the reconnect window lapses.
