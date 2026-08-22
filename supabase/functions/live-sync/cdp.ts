@@ -139,9 +139,28 @@ export class Cdp {
   ): Promise<Cdp> {
     const host = opts.host ?? "production-sfo.browserless.io";
     const token = encodeURIComponent(opts.token);
+    const timeout = opts.sessionTimeoutMs ?? 180000;
+
+    // --disable-http2 is the important one. Airline edges (Air India sits
+    // behind Akamai) answer headless Chrome over HTTP/2 from a datacenter
+    // IP by tearing the connection down mid-handshake, which Chrome reports
+    // as ERR_HTTP2_PROTOCOL_ERROR — a page that never loads rather than an
+    // honest 403. Falling back to HTTP/1.1 avoids the fingerprint that
+    // triggers it.
+    const launch = encodeURIComponent(
+      JSON.stringify({
+        stealth: true,
+        args: [
+          "--disable-http2",
+          "--disable-blink-features=AutomationControlled",
+          "--lang=en-IN",
+        ],
+      })
+    );
 
     const candidates = [
-      `wss://${host}?token=${token}&timeout=${opts.sessionTimeoutMs ?? 180000}`,
+      `wss://${host}?token=${token}&timeout=${timeout}&launch=${launch}`,
+      `wss://${host}?token=${token}&timeout=${timeout}`,
       `wss://${host}?token=${token}`,
     ];
 
@@ -191,10 +210,38 @@ export class Cdp {
 
     await this.send("Page.enable");
     await this.send("Runtime.enable");
-    // A phone-sized viewport, because the screenshots go to a user who is
-    // most likely holding one.
+    await this.send("Network.enable").catch(() => {});
+
+    // Present as an ordinary Indian visitor on a real browser build.
+    // Headless Chrome's default UA announces itself ("HeadlessChrome"),
+    // and an edge that is already suspicious of the IP will not give a
+    // self-identifying bot the benefit of the doubt.
+    await this.send("Network.setUserAgentOverride", {
+      userAgent:
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
+        "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+      acceptLanguage: "en-IN,en-GB;q=0.9,en;q=0.8",
+      platform: "Win32",
+    }).catch(() => {});
+
+    await this.send("Network.setExtraHTTPHeaders", {
+      headers: {
+        "Accept-Language": "en-IN,en-GB;q=0.9,en;q=0.8",
+        "Upgrade-Insecure-Requests": "1",
+      },
+    }).catch(() => {});
+
+    // navigator.webdriver is the single most-checked automation tell.
+    await this.send("Page.addScriptToEvaluateOnNewDocument", {
+      source:
+        "Object.defineProperty(navigator, 'webdriver', { get: () => undefined });",
+    }).catch(() => {});
+
+    // A desktop-shaped viewport. The screenshots are for a person on a
+    // phone, but a 430px-wide desktop UA is itself an inconsistency worth
+    // not handing to a fingerprinter; the image scales fine either way.
     await this.send("Emulation.setDeviceMetricsOverride", {
-      width: 430,
+      width: 1280,
       height: 900,
       deviceScaleFactor: 1,
       mobile: false,
@@ -221,8 +268,24 @@ export class Cdp {
     return res.result?.value;
   }
 
+  /**
+   * Navigate, and fail loudly if the site refused us.
+   *
+   * Page.navigate reports a failed load in `errorText` rather than by
+   * throwing, so ignoring it meant a blocked site looked downstream like
+   * "the sign-in page has no phone field" — a wrong diagnosis pointing at
+   * our selectors when the page had never loaded at all.
+   */
   async navigate(url: string): Promise<void> {
-    await this.send("Page.navigate", { url });
+    const res = await this.send("Page.navigate", { url });
+    if (res?.errorText) {
+      throw new Error(
+        `The site refused the connection (${res.errorText}). ` +
+          (String(res.errorText).includes("HTTP2")
+            ? "That is usually bot protection rejecting a datacenter IP rather than an outage."
+            : "")
+      );
+    }
   }
 
   /**
@@ -234,6 +297,17 @@ export class Cdp {
     const deadline = Date.now() + timeoutMs;
     while (Date.now() < deadline) {
       try {
+        // A Chrome error page is "ready" and has text, so checking only
+        // readyState would happily hand back the "site can't be reached"
+        // screen as if it were the login form.
+        const where = await this.evaluate("location.href");
+        if (typeof where === "string" && where.startsWith("chrome-error://")) {
+          throw new Error(
+            "The site did not load — the browser showed its own error page. " +
+              "This is normally bot protection refusing a datacenter IP."
+          );
+        }
+
         const ok = await this.evaluate(`
           (function () {
             if (document.readyState === "loading") return false;
@@ -246,8 +320,10 @@ export class Cdp {
           await sleep(1200);
           return;
         }
-      } catch {
-        // Mid-navigation the context is destroyed; that is expected.
+      } catch (e) {
+        // A destroyed context mid-navigation is expected; a refused load
+        // is not, and must not be swallowed into a selector complaint.
+        if ((e as Error).message?.includes("did not load")) throw e;
       }
       await sleep(400);
     }
