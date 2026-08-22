@@ -237,6 +237,19 @@ async function run({ sessionId, token, host }: RunInput): Promise<void> {
     await update(sessionId, { step_message: "Reading your balance…" });
     await sleep(7000);
     await cdp.waitForReady(9000);
+
+    // Several programs keep the balance on a dedicated page rather than the
+    // post-login landing screen; scanning the landing page would find either
+    // nothing or a marketing figure.
+    if (row.balance_url) {
+      try {
+        await cdp.navigate(row.balance_url);
+        await cdp.waitForReady(12000);
+      } catch {
+        // Stay wherever we landed and read that instead.
+      }
+    }
+
     await cdp.evaluate(FINDER).catch(() => {});
     await cdp.evaluate(DISMISS).catch(() => {});
 

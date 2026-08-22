@@ -40,10 +40,14 @@ export interface LiveSyncProgram {
 
 export const LIVE_SYNC_PROGRAMS: LiveSyncProgram[] = [
   {
+    // Air India has no standalone login URL — /login.html is a 404. Sign-in
+    // is a panel opened from a header control, which the driver reaches via
+    // its "open the login form" click before looking for a phone field.
     code: "ai_maharaja",
     programId: 88,
     name: "Air India Maharaja Club",
-    loginUrl: "https://www.airindia.com/in/en/login.html",
+    loginUrl: "https://www.airindia.com/in/en/maharaja-club.html",
+    balanceUrl: "https://www.airindia.com/in/en/maharaja-club/account-summary.html",
     stripDialCode: "91",
   },
   {

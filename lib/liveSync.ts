@@ -138,6 +138,7 @@ export async function startSync(opts: {
     program_id: program.programId,
     program_code: program.code,
     login_url: program.loginUrl,
+    balance_url: program.balanceUrl ?? null,
     status: "starting",
     step_message: "Starting…",
     expires_at: new Date(Date.now() + 150_000).toISOString(),
